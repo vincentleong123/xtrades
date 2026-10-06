@@ -351,6 +351,22 @@
       "spread": 47.0,
       "hour": 14,
       "ema_gap_pct": 0.00676
+    },
+    {
+      "ts": "2026-10-06T12:34:05.892552+00:00",
+      "direction": "BUY",
+      "lots": 0.07,
+      "entry": 4171.3,
+      "exit": 4171.3,
+      "pnl": -39.34,
+      "reason": "EXPERT",
+      "atr_ratio": 0.0,
+      "radar_score": 0,
+      "ma_dist_atr": 99.0,
+      "sweep_ratio": 0.0,
+      "spread": 0.0,
+      "hour": 0,
+      "ema_gap_pct": 0.0
     }
   ],
   "rules": [],

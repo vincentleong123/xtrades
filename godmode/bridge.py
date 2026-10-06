@@ -14,6 +14,8 @@ Routes:
   GET  /api/cmd-result     -> cmd_result.json (bot's execution result)
   GET  /api/log            -> last lines of bot_live.log (the bot's "thoughts")
   POST /api/start          -> remove kill flag + reset profit cycle (Start button)
+  POST /api/stop           -> create watchdog-disable.flag (watchdog stops bot+bridge,
+                              both idle until the flag is deleted = START BOT)
 """
 
 import json
@@ -88,6 +90,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(503, {"error": "cmd_result.json being written"})
             else:
                 self._json(200, {"pending": True})
+        elif self.path == "/api/stop":
+            self._json(405, {"error": "use POST /api/stop to STOP the bot (watchdog halt)"})
         elif self.path == "/api/config":
             if os.path.exists(CONFIG_PATH):
                 with open(CONFIG_PATH, "rb") as f:
@@ -106,6 +110,17 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
+        if self.path == "/api/stop":
+            try:
+                with open(WATCHDOG_FLAG, "w") as f:
+                    f.write("stop requested via dashboard "
+                            + time.strftime("%Y-%m-%d %H:%M:%S"))
+                self._json(200, {"ok": True, "stopped": True,
+                                 "note": "watchdog halts bot + bridge within ~40s; "
+                                         "everything stays off until START BOT is pressed"})
+            except OSError as e:
+                self._json(500, {"ok": False, "error": str(e)})
+            return
         if self.path == "/api/start":
             removed = []
             for path in (WATCHDOG_FLAG, PROFIT_GUARD, CMD_PATH,
