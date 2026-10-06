@@ -1,0 +1,18 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Live logs & launch redirects (regenerated continuously)
+godmode/*.log
+godmode/watchdog_out.txt
+
+# Volatile runtime state (rewritten while the bot runs)
+godmode/god_data.json
+godmode/cmd.json
+godmode/cmd_result.json
+godmode/profit_guard.json
+godmode/main_wallet.json
+godmode/watchdog-disable.flag
+
+# Temp / self-test artifacts
+godmode/_learner_selftest.json

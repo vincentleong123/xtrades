@@ -1,0 +1,2226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XAU/USD Trading Journey Simulator v2 - With Learning Database</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: #0a0e1a;
+            color: #e0e0e0;
+            padding: 16px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 420px;
+            gap: 16px;
+            max-width: 1700px;
+            margin: 0 auto;
+        }
+
+        .panel { display: flex; flex-direction: column; gap: 12px; }
+
+        .header-bar {
+            background: linear-gradient(135deg, #1a1f2e 0%, #2a2f3e 100%);
+            border: 1px solid #3a3f4e;
+            border-radius: 12px;
+            padding: 18px;
+        }
+        .header-bar h1 { color: #ffd700; font-size: 22px; margin-bottom: 6px; }
+        .header-bar p { color: #888; font-size: 12px; }
+
+        .card {
+            background: #1a1f2e;
+            border: 1px solid #3a3f4e;
+            border-radius: 12px;
+            padding: 14px;
+        }
+        .card h3 {
+            color: #ffd700;
+            font-size: 13px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .input-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+            gap: 8px;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .input-group label {
+            font-size: 9px;
+            color: #888;
+            text-transform: uppercase;
+        }
+        .input-group input, .input-group select {
+            background: #2a2f3e;
+            border: 1px solid #3a3f4e;
+            color: #e0e0e0;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .input-group input:focus { outline: none; border-color: #ffd700; }
+        .input-group.tuning { background: rgba(255, 215, 0, 0.05); padding: 6px; border-radius: 4px; border: 1px solid rgba(255,215,0,0.2); }
+
+        .speed-selector {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 4px;
+        }
+        .speed-btn {
+            padding: 6px;
+            border-radius: 4px;
+            border: 2px solid #3a3f4e;
+            background: #2a2f3e;
+            color: #e0e0e0;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            font-size: 10px;
+        }
+        .speed-btn:hover { border-color: #ffd700; }
+        .speed-btn.active {
+            border-color: #ffd700;
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+            gap: 8px;
+        }
+        .stat-card {
+            background: #1a1f2e;
+            border: 1px solid #3a3f4e;
+            border-radius: 8px;
+            padding: 8px;
+        }
+        .stat-card .label {
+            font-size: 9px;
+            color: #888;
+            text-transform: uppercase;
+            margin-bottom: 3px;
+        }
+        .stat-card .value { font-size: 14px; font-weight: bold; }
+        .stat-card .value.positive { color: #00ff88; }
+        .stat-card .value.negative { color: #ff4444; }
+
+        .progress-bar-bg {
+            background: #2a2f3e;
+            height: 24px;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ffd700 0%, #ffed4a 100%);
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #0a0e1a;
+            font-weight: bold;
+            font-size: 11px;
+        }
+
+        .chart-window {
+            background: #1a1f2e;
+            border: 1px solid #3a3f4e;
+            border-radius: 12px;
+            padding: 12px;
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .chart-title { color: #ffd700; font-size: 12px; font-weight: bold; }
+        .chart-type-selector { display: flex; gap: 4px; }
+        .chart-type-btn {
+            padding: 3px 8px;
+            border-radius: 3px;
+            border: 1px solid #3a3f4e;
+            background: #2a2f3e;
+            color: #e0e0e0;
+            cursor: pointer;
+            font-size: 9px;
+        }
+        .chart-type-btn.active, .view-btn.active { background: #ffd700; color: #0a0e1a; }
+        #priceChart { width: 100%; height: 280px; cursor: grab; touch-action: pan-y; }
+        #priceChart.grabbing { cursor: grabbing; }
+
+        .trade-list {
+            background: #1a1f2e;
+            border: 1px solid #3a3f4e;
+            border-radius: 12px;
+            padding: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .trade-item {
+            display: grid;
+            grid-template-columns: 30px 1fr 70px;
+            gap: 6px;
+            padding: 6px;
+            margin: 3px 0;
+            border-radius: 4px;
+            font-size: 10px;
+            border-left: 3px solid;
+        }
+        .trade-item.win {
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.05);
+        }
+        .trade-item.loss {
+            border-color: #ff4444;
+            background: rgba(255, 68, 68, 0.05);
+        }
+        .trade-item.current { animation: pulse 1.5s infinite; border-color: #ffd700; }
+        @keyframes pulse {
+            0%, 100% { background: rgba(255, 215, 0, 0.1); }
+            50% { background: rgba(255, 215, 0, 0.25); }
+        }
+        .trade-num { color: #888; font-weight: bold; }
+        .trade-dir { font-weight: bold; }
+        .trade-dir.long { color: #00ff88; }
+        .trade-dir.short { color: #ff4444; }
+        .trade-pnl { font-weight: bold; text-align: right; }
+        .trade-pnl.positive { color: #00ff88; }
+        .trade-pnl.negative { color: #ff4444; }
+
+        .controls {
+            background: #1a1f2e;
+            border: 1px solid #3a3f4e;
+            border-radius: 12px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 7px 14px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .btn-primary { background: #ffd700; color: #0a0e1a; }
+        .btn-secondary { background: #3a3f4e; color: #e0e0e0; }
+        .btn-success { background: #00ff88; color: #0a0e1a; }
+
+        /* ---------- live-status feedback layer ---------- */
+        .btn[disabled] { opacity: .38; cursor: not-allowed; filter: grayscale(1); }
+        .btn.busy { position: relative; color: transparent !important; }
+        .btn.busy::after {
+            content: ''; position: absolute; inset: 0; margin: auto;
+            width: 12px; height: 12px; border-radius: 50%;
+            border: 2px solid rgba(10,14,26,.35); border-top-color: #0a0e1a;
+            animation: spin .7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .btn-note { font-size: 9.5px; color: #ff9f9f; margin-top: 6px; min-height: 12px; }
+
+        .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+        .chip {
+            font-size: 10px; font-weight: 700; letter-spacing: .3px;
+            padding: 4px 9px; border-radius: 20px; border: 1px solid;
+            display: inline-flex; align-items: center; gap: 5px;
+            font-family: Consolas, monospace;
+        }
+        .chip .led { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+        .chip.ok { color: #00ff88; border-color: #00ff8855; background: #00ff8812; }
+        .chip.warn { color: #ffd166; border-color: #ffd16655; background: #ffd16612; }
+        .chip.bad { color: #ff6b6b; border-color: #ff6b6b55; background: #ff6b6b12; }
+        .chip.idle { color: #7a8296; border-color: #7a829655; background: #7a829610; }
+
+        .actlog {
+            background: #0b0f18; border: 1px solid #22283a; border-radius: 6px;
+            margin-top: 10px; max-height: 168px; overflow-y: auto;
+            font-family: Consolas, monospace; font-size: 10.5px; line-height: 1.55;
+        }
+        .actlog .row { padding: 4px 9px; border-bottom: 1px solid #161b28; display: flex; gap: 8px; }
+        .actlog .row:last-child { border-bottom: none; }
+        .actlog .t { color: #5b6478; flex: 0 0 auto; }
+        .actlog .m { flex: 1 1 auto; word-break: break-word; }
+        .actlog .ok .m { color: #00ff88; }
+        .actlog .err .m { color: #ff6b6b; }
+        .actlog .wait .m { color: #ffd166; }
+        .actlog .info .m { color: #9aa4b2; }
+
+        .preview {
+            background: #0b0f18; border: 1px solid #22283a; border-radius: 6px;
+            margin-top: 10px; padding: 8px 10px; font-family: Consolas, monospace;
+            font-size: 10.5px; line-height: 1.6;
+        }
+        .preview .hdr { color: #667; font-size: 9.5px; letter-spacing: .4px; text-transform: uppercase; }
+        .preview .kv { display: flex; gap: 8px; }
+        .preview .kv .k { color: #7a8296; flex: 0 0 132px; }
+        .preview .kv .v { color: #c8d0e0; }
+        .preview .kv.changed .k { color: #ffd166; }
+        .preview .kv.changed .v { color: #ffd700; font-weight: 700; }
+        .preview .kv .v em { color: #00ff88; font-style: normal; }
+
+        .db-log {
+            background: #0d1117;
+            border: 1px solid #3a3f4e;
+            border-radius: 6px;
+            padding: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .db-entry { padding: 3px 0; border-bottom: 1px solid #1a1f2e; }
+        .db-entry.improvement { color: #00ff88; }
+        .db-entry.decline { color: #ff4444; }
+
+        .info-box {
+            background: rgba(255, 215, 0, 0.05);
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            border-radius: 6px;
+            padding: 10px;
+            font-size: 11px;
+            color: #ffd700;
+            margin-top: 8px;
+        }
+
+        .seed-display {
+            background: #2a2f3e;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+            color: #ffd700;
+        }
+
+        .data-badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 9px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+        .data-badge.real { background: rgba(0, 255, 136, 0.12); color: #00ff88; border: 1px solid rgba(0,255,136,0.4); }
+        .data-badge.synth { background: rgba(255, 68, 68, 0.12); color: #ff4444; border: 1px solid rgba(255,68,68,0.4); }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <div class="panel">
+            <div class="header-bar">
+                <h1>XAU/USD Trading Journey v2 — With Learning Database</h1>
+                <p>Backtested on real XAU/USD bars from MetaTrader 5 (refresh with <code>python export_history.py</code>). Trades are simulated EMA-crossover + ATR-stop entries on actual price action. Best runs saved to your local DB.</p>
+            </div>
+
+            <div class="card">
+                <h3>Replay Control <span class="seed-display" id="seedDisplay">SEED: random</span></h3>
+                <div class="input-grid">
+                    <div class="input-group">
+                        <label>Seed (synthetic fallback only)</label>
+                        <input type="text" id="seedInput" value="random" placeholder="random or number">
+                    </div>
+                    <div class="input-group">
+                        <label>Start Balance ($)</label>
+                        <input type="number" id="startBalance" value="500" step="50">
+                    </div>
+                    <div class="input-group">
+                        <label>Target Balance ($)</label>
+                        <input type="number" id="targetBalance" value="2000" step="100">
+                    </div>
+                    <div class="input-group">
+                        <label>Base Lots</label>
+                        <input type="number" id="baseLots" value="0.01" step="0.01">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Strategy Tuning <span style="font-size:9px; color:#888;">(changes strategy behavior)</span></h3>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+                    <button class="btn btn-success" onclick="applyBestPreset()">★ BEST preset (proven 1-min)</button>
+                    <span style="font-size:9.5px; color:#667;">fills the sim + pushes to the bot with read-back confirmation. Measured on real bars: WR 57% · PF 4.89 · DD 3.2% (21 trades, 3.5 days)</span>
+                </div>
+                <div class="input-grid">
+                    <div class="input-group tuning">
+                        <label>EMA Fast</label>
+                        <input type="number" id="emaFast" value="7" min="3" max="50">
+                    </div>
+                    <div class="input-group tuning">
+                        <label>EMA Slow</label>
+                        <input type="number" id="emaSlow" value="35" min="10" max="100">
+                    </div>
+                    <div class="input-group tuning">
+                        <label>ATR Stop (x)</label>
+                        <input type="number" id="atrStop" value="2.5" step="0.5" min="1" max="5">
+                    </div>
+                    <div class="input-group tuning">
+                        <label>R:R Ratio</label>
+                        <input type="number" id="rrRatio" value="2.0" step="0.5" min="1" max="5">
+                    </div>
+                    <div class="input-group tuning">
+                        <label>Risk %</label>
+                        <input type="number" id="riskPct" value="2" step="0.5" min="0.5" max="5">
+                    </div>
+                    <div class="input-group tuning">
+                        <label>Max Concurrent</label>
+                        <select id="maxConcurrent">
+                            <option value="1">1</option>
+                            <option value="2" selected>2</option>
+                            <option value="3">3</option>
+                        </select>
+                    </div>
+                    <div class="input-group tuning" style="display:flex; align-items:center; gap:6px; padding-top:14px;">
+                        <input type="checkbox" id="wickProof" checked style="width:auto;">
+                        <label for="wickProof" style="margin:0; font-size:10px;">Wick-Proof Stop</label>
+                    </div>
+                    <div class="input-group tuning">
+                        <label>Disaster Stop (x)</label>
+                        <input type="number" id="disasterMult" value="1.5" step="0.25" min="1" max="3">
+                    </div>
+                </div>
+                <div class="info-box">
+                    <strong>How to minimize stop losses:</strong> Increase ATR stop (try 2.5-3.0x), increase R:R ratio (3.0), shorter EMA spread (5/15 for more signals, 13/34 for fewer but stronger). Click "Auto-Tune" to test 50+ combos.
+                </div>
+            </div>
+
+            <div class="card" id="cockpitCard">
+                <h3>Live Cockpit <span style="font-size:9px; color:#888;">(MetaQuotes-Demo via MT5)</span></h3>
+                <div class="chips" id="liveChips"></div>
+                <div id="liveStrategy" style="background:#0b0f18; border:1px solid #22283a; border-radius:6px; padding:7px 10px; font-family:Consolas,monospace; font-size:10.5px; line-height:1.5; margin-bottom:10px; color:#c8d0e0;">
+                    <span style="color:#667;">RUNNING:</span> reading bot...
+                    <div id="liveStrategyNote" style="font-size:9.5px; color:#667; margin-top:2px;"></div>
+                </div>
+                <div id="mainWalletCard" style="background:linear-gradient(135deg,#123318,#0b2312); border:1px solid #00ff8844; border-radius:6px; padding:10px 12px; margin-bottom:10px; font-family:Consolas,monospace;">
+                    <div style="display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;">
+                        <span style="font-size:10px; color:#8bd17c; letter-spacing:.5px;">MAIN WALLET</span>
+                        <span id="mwTotal" style="font-size:20px; font-weight:700; color:#00ff88;">$0</span>
+                        <span id="mwToday" style="font-size:11px; color:#8bd17c;">0 blocks today</span>
+                        <span id="mwNext" style="font-size:10px; color:#667;"></span>
+                    </div>
+                    <div id="mwBlocks" style="font-size:10px; color:#9aa4b2; margin-top:6px; line-height:1.6;"></div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+                    <span id="liveDot" style="width:10px; height:10px; border-radius:50%; background:#555; display:inline-block; flex:0 0 auto;"></span>
+                    <span id="liveStatus" style="font-size:11px; color:#aaa;">connecting to bridge...</span>
+                </div>
+                <div id="autoTradeWarn" style="display:none; background:#3a2b00; border:1px solid #ffd166; color:#ffd166; border-radius:6px; padding:8px 10px; font-size:11px; margin-bottom:10px;">
+                    <strong>AutoTrading is OFF in MT5</strong> — click the <em>Algo Trading</em> button in the MT5 toolbar (or press Ctrl+E inside the terminal), then watch this banner disappear.
+                </div>
+                <div class="input-grid" style="grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));">
+                    <div class="input-group">
+                        <label>Lots</label>
+                        <input type="number" id="cockpitLots" value="0.01" step="0.01" min="0.01">
+                    </div>
+                    <div class="input-group">
+                        <label>Profit Target $</label>
+                        <input type="number" id="profitTarget" value="100" step="25" min="0">
+                    </div>
+                    <div class="input-group">
+                        <label>Equity / Balance</label>
+                        <input type="text" id="cockpitEquity" disabled>
+                    </div>
+                    <div class="input-group">
+                        <label>Radar</label>
+                        <input type="text" id="cockpitRadar" disabled>
+                    </div>
+                    <div class="input-group">
+                        <label>Open Positions</label>
+                        <input type="text" id="cockpitPos" disabled>
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+                    <button class="btn btn-primary" id="btnPushStrategy" onclick="pushStrategy()">Push Strategy to Bot</button>
+                    <button class="btn btn-success" id="btnBuy" onclick="sendCmd('buy')">BUY</button>
+                    <button class="btn btn-secondary" id="btnSell" onclick="sendCmd('sell')" style="background:#ff5c5c; color:#0a0e1a; font-weight:700;">SELL</button>
+                    <button class="btn btn-secondary" id="btnCloseAll" onclick="sendCmd('close_all')" style="background:#ffd166; color:#0a0e1a; font-weight:700;">Close All</button>
+                </div>
+                <div class="btn-note" id="cockpitWhy"></div>
+                <div class="preview" id="pushPreview"></div>
+                <div class="actlog" id="actLog"></div>
+            </div>
+
+            <div class="card" id="patternLabCard">
+                <h3>Pattern Lab <span style="font-size:9px; color:#888;">(discovered from real XAUUSD bars — fewer, better trades)</span></h3>
+                <div style="font-size:10.5px; color:#9aa4b2; line-height:1.5; margin-bottom:8px;">
+                    A parameter sweep over every historical bar (spread included) showed the old
+                    <b>"trade every EMA cross"</b> style is not reliably profitable. Requiring each cross to be a
+                    <b>real breakout in live volatility</b>, then parking the stop at breakeven at +1R,
+                    cut trades by 84% while tripling the win rate. Measured on 1-min bars:
+                </div>
+                <table style="width:100%; border-collapse:collapse; font-size:10.5px; font-family:Consolas,monospace;">
+                    <tr style="color:#667;">
+                        <th style="text-align:left; padding:3px 6px; border-bottom:1px solid #22283a;">style</th>
+                        <th style="text-align:right; padding:3px 6px; border-bottom:1px solid #22283a;">trades</th>
+                        <th style="text-align:right; padding:3px 6px; border-bottom:1px solid #22283a;">win %</th>
+                        <th style="text-align:right; padding:3px 6px; border-bottom:1px solid #22283a;">PF</th>
+                        <th style="text-align:right; padding:3px 6px; border-bottom:1px solid #22283a;">$/trade</th>
+                        <th style="text-align:right; padding:3px 6px; border-bottom:1px solid #22283a;">maxDD</th>
+                        <th style="text-align:right; padding:3px 6px; border-bottom:1px solid #22283a;">stop-outs</th>
+                    </tr>
+                    <tr style="color:#ff9f9f;">
+                        <td style="padding:3px 6px;">every EMA cross (old)</td>
+                        <td style="text-align:right;">131</td><td style="text-align:right;">23.7</td>
+                        <td style="text-align:right;">1.61</td><td style="text-align:right;">0.89</td>
+                        <td style="text-align:right;">14.4%</td><td style="text-align:right;">67</td>
+                    </tr>
+                    <tr style="color:#8bd17c; font-weight:bold;">
+                        <td style="padding:3px 6px;">+ breakout + vol + breakeven</td>
+                        <td style="text-align:right;">21</td><td style="text-align:right;">57.1</td>
+                        <td style="text-align:right;">4.89</td><td style="text-align:right;">5.35</td>
+                        <td style="text-align:right;">3.2%</td><td style="text-align:right;">5</td>
+                    </tr>
+                </table>
+                <div style="font-size:9.5px; color:#667; margin-top:7px; line-height:1.5;">
+                    Trust checks: <b style="color:#8bd17c;">45/45 neighbouring parameter sets profitable</b> (a real plateau, not a lucky spike)
+                    · survives spread up to $1.60 (4&times; worse) · both halves of the sample profitable.
+                    Honest caveat: ~3.5 days of 1-min data, so treat it as a hypothesis to paper-trade, not a proven edge.
+                    On 5-min bars even the gated version stays unprofitable.
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px;">
+                    <button class="btn btn-primary" onclick="pushProfile('proven')">Push PROVEN profile (1-min)</button>
+                    <button class="btn" onclick="pushProfile('proven15')">Push PROVEN 15-min</button>
+                    <button class="btn" onclick="pushProfile('aggressive')">Push YOUR aggressive (15/21, RR5)</button>
+                    <span id="patternMsg" style="font-size:10px; color:#8bd17c;"></span>
+                </div>
+                <div style="font-size:9.5px; color:#667; margin-top:6px;">
+                    Live gates now enforced by the bot: the signal candle must close beyond the
+                    <b>20-bar high/low</b>, ATR must be above its 50-bar average, and the stop moves to
+                    breakeven at <b>+1R</b>. Watch the Bot Console below — you'll see
+                    <span style="color:#c58fff;">[gate] SKIP ...</span> lines explaining every setup it refuses.
+                </div>
+            </div>
+
+            <div class="card" id="botConsoleCard">
+                <h3>Bot Console <span style="font-size:9px; color:#888;">(the algorithm's mind — idle · thinking · waiting · executing)</span></h3>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+                    <button class="btn btn-primary" id="btnStartBot" onclick="startBot()">Start Bot</button>
+                    <span id="consoleState" style="font-size:11px; color:#aaa;">connecting...</span>
+                    <span id="botStateBadge" class="chip idle" style="margin-left:auto;">STATE: ?</span>
+                </div>
+                <div class="btn-note" id="startNote"></div>
+                <div id="botNow" style="background:#10141f; border:1px solid #22283a; border-left:3px solid #7ec8ff; border-radius:6px; padding:7px 10px; font-size:11px; font-family:Consolas,monospace; color:#c8d0e0; margin-bottom:8px; min-height:30px;">
+                    <span style="color:#667;">NOW:</span> waiting for first cycle...
+                </div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px;" id="termFilters">
+                    <span class="chip ok" data-f="all"           onclick="setTermFilter('all')">ALL</span>
+                    <span class="chip idle" data-f="think"       onclick="setTermFilter('think')">THINKING</span>
+                    <span class="chip idle" data-f="gate"        onclick="setTermFilter('gate')">GATES</span>
+                    <span class="chip idle" data-f="trade"       onclick="setTermFilter('trade')">TRADES</span>
+                    <span class="chip idle" data-f="vault"       onclick="setTermFilter('vault')">VAULT</span>
+                    <span class="chip idle" data-f="err"         onclick="setTermFilter('err')">ERRORS</span>
+                </div>
+                <div id="botConsole" style="background:#0d1117; border:1px solid #22283a; border-radius:6px; height:380px; overflow-y:auto; padding:8px 10px; font-family:Consolas,monospace; font-size:10.5px; line-height:1.5; white-space:pre-wrap; color:#9aa4b2;">loading log...</div>
+                <div style="font-size:9px; color:#667; margin-top:6px;">[think] = narration every cycle (patience, radar, countdowns) · green = trades/banks · orange = gate refusals · purple = system events · red = problems · timestamps = when the page first saw the line</div>
+            </div>
+
+            <div class="card">
+                <h3>Timeframe</h3>
+                <div class="speed-selector">
+                    <div class="speed-btn" data-speed="1min" onclick="selectSpeed('1min')">1M</div>
+                    <div class="speed-btn" data-speed="2min" onclick="selectSpeed('2min')">2M</div>
+                    <div class="speed-btn" data-speed="5min" onclick="selectSpeed('5min')">5M</div>
+                    <div class="speed-btn" data-speed="15min" onclick="selectSpeed('15min')">15M</div>
+                    <div class="speed-btn" data-speed="30min" onclick="selectSpeed('30min')">30M</div>
+                    <div class="speed-btn active" data-speed="1hour" onclick="selectSpeed('1hour')">1H</div>
+                    <div class="speed-btn" data-speed="4hour" onclick="selectSpeed('4hour')">4H</div>
+                    <div class="speed-btn" data-speed="daily" onclick="selectSpeed('daily')">Daily</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Training Range <span style="font-size:9px; color:#888;">(Kuala Lumpur time)</span></h3>
+                <div class="input-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+                    <div class="input-group">
+                        <label>From</label>
+                        <input type="datetime-local" id="rangeFrom" step="600">
+                    </div>
+                    <div class="input-group">
+                        <label>To</label>
+                        <input type="datetime-local" id="rangeTo" step="600">
+                    </div>
+                    <div class="input-group">
+                        <label>&nbsp;</label>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn btn-primary" onclick="applyRange()" style="flex:1;">Apply</button>
+                            <button class="btn btn-secondary" onclick="clearRange()">All data</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="rangeInfo" class="info-box" style="margin-top:8px;"></div>
+            </div>
+
+            <div class="card">
+                <h3>Progress</h3>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" id="progressFill">0%</div>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-top:6px; font-size:10px; color:#888;">
+                    <span id="startLabel">$500</span>
+                    <span id="targetLabel">$2,000 (Target)</span>
+                </div>
+            </div>
+
+            <div class="chart-window">
+                <div class="chart-header">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <div class="chart-title" id="chartTitle">XAU/USD</div>
+                        <span class="data-badge synth" id="dataBadge">LOADING...</span>
+                    </div>
+                    <div class="chart-type-selector">
+                        <button class="chart-type-btn view-btn active" id="btnFollow" onclick="setViewFollow()">Follow trade</button>
+                        <button class="chart-type-btn view-btn" id="btnLive" onclick="setViewLive()">Live</button>
+                        <button class="chart-type-btn active" onclick="setChartType('candlestick')">Candles</button>
+                        <button class="chart-type-btn" onclick="setChartType('heiken')">Heiken</button>
+                        <button class="chart-type-btn" onclick="setChartType('line')">Line</button>
+                    </div>
+                </div>
+                <canvas id="priceChart"></canvas>
+            </div>
+
+            <div class="controls">
+                <button class="btn btn-primary" id="btnPlay" onclick="togglePlay()">Play</button>
+                <button class="btn btn-secondary" onclick="resetReplay()">Reset</button>
+                <button class="btn btn-secondary" onclick="stepForward()">Next</button>
+                <button class="btn btn-success" onclick="autoTune()">Auto-Tune (50 combos)</button>
+                <div style="display:flex; align-items:center; gap:6px; margin-left:auto;">
+                    <span style="font-size:10px;">Speed:</span>
+                    <input type="range" id="playbackSpeed" min="1" max="100" value="20" style="width:80px;" onchange="updatePlaybackSpeed()">
+                    <span id="playbackLabel" style="font-size:10px; min-width:25px;">2x</span>
+                </div>
+            </div>
+            <div id="simNote" style="font-size:10.5px; font-family:Consolas,monospace; margin-top:8px; min-height:14px; color:#9aa4b2; opacity:.45; transition:opacity .3s;">tweak any Strategy Tuning input and the backtest recalculates instantly</div>
+        </div>
+
+        <div class="panel">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="label">Balance</div>
+                    <div class="value" id="currentBalance">$500</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Profit</div>
+                    <div class="value" id="currentPnl">$0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Trade #</div>
+                    <div class="value" id="tradeNum">0/0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Win Rate</div>
+                    <div class="value" id="winRate">0%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Stop Losses</div>
+                    <div class="value" id="stopLossCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Profit Factor</div>
+                    <div class="value" id="profitFactor">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Max DD</div>
+                    <div class="value" id="maxDD">0%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Running</div>
+                    <div class="value" id="runningTrades">0</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Learning Database (Local Storage)</h3>
+                <div style="display:flex; gap:6px; margin-bottom:8px;">
+                    <button class="btn btn-secondary" onclick="saveToDB()" style="flex:1;">Save Current Run</button>
+                    <button class="btn btn-secondary" onclick="exportDB()">Export</button>
+                    <button class="btn btn-secondary" onclick="clearDB()">Clear</button>
+                </div>
+                <div class="db-log" id="dbLog">
+                    <div style="color:#666;">Run the simulator, then save your best runs here. The DB remembers which parameter combos worked best.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Best Saved Runs</h3>
+                <div id="bestRuns"></div>
+            </div>
+
+            <div class="card">
+                <h3>Trade Log</h3>
+                <div class="trade-list" id="tradeList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="xauusd_history.js"></script>
+    <script>
+        const TF_LABELS = { '1min':'1M', '2min':'2M', '5min':'5M', '15min':'15M', '30min':'30M', '1hour':'1H', '4hour':'4H', 'daily':'D' };
+
+        let currentSpeedProfile = '1hour';
+        let allTrades = [];
+        let priceCandles = [];
+        let currentTradeIndex = 0;
+        let isPlaying = false;
+        let playbackSpeed = 2;
+        let animationId = null;
+        let chartType = 'candlestick';
+        let chartCanvas, chartCtx;
+        let runningPositions = 0;
+        let currentSeed = 'random';
+        let seededRandom = null;
+        let dataSource = 'synthetic';
+        let masterCandles = [];
+        const CHART_WINDOW = 150;
+        let viewEnd = null;
+        let viewFollow = true;
+        let lastCandleW = 0;
+
+        function selectSpeed(profile) {
+            currentSpeedProfile = profile;
+            document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector(`[data-speed="${profile}"]`).classList.add('active');
+            regenerate();
+        }
+
+        function seedRandom(seed) {
+            let s = typeof seed === 'string' ? seed.split('').reduce((a,c) => a + c.charCodeAt(0), 0) : seed;
+            return function() {
+                s = (s * 9301 + 49297) % 233280;
+                return s / 233280;
+            };
+        }
+
+        function getSeed() {
+            const seedInput = document.getElementById('seedInput').value.trim();
+            if (seedInput === 'random' || seedInput === '') {
+                currentSeed = Math.floor(Math.random() * 1000000);
+            } else {
+                currentSeed = parseInt(seedInput) || seedInput;
+            }
+            seededRandom = seedRandom(currentSeed);
+            document.getElementById('seedDisplay').textContent = 'SEED: ' + currentSeed;
+            return seededRandom;
+        }
+
+        function regenerate() {
+            getSeed();
+            generateCandles(seededRandom);
+            applyRange();
+        }
+
+        function updateDataBadge() {
+            const badge = document.getElementById('dataBadge');
+            const title = document.getElementById('chartTitle');
+            if (dataSource === 'real') {
+                const first = priceCandles[0], last = priceCandles[priceCandles.length - 1];
+                badge.className = 'data-badge real';
+                badge.textContent = 'MT5 REAL DATA - ' + priceCandles.length + ' bars';
+                badge.title = 'xauusd_history.js exported ' + ((window.XAUUSD_HISTORY && window.XAUUSD_HISTORY.updated) || '?')
+                    + ' | last bar ' + fmtKLDate(last.t) + ' (KL)';
+                title.textContent = 'XAU/USD ' + TF_LABELS[currentSpeedProfile]
+                    + '  ' + fmtKLDate(first.t)
+                    + ' -> ' + fmtKLDate(last.t);
+            } else {
+                badge.className = 'data-badge synth';
+                badge.textContent = 'SYNTHETIC FAKE DATA (run export_history.py)';
+                title.textContent = 'XAU/USD - FAKE random-walk bars';
+            }
+        }
+
+        function getRealCandles() {
+            const h = window.XAUUSD_HISTORY;
+            if (!h || !h.timeframes) return null;
+            const bars = h.timeframes[currentSpeedProfile];
+            if (!bars || bars.length < 60) return null;
+            return bars.map(b => ({ t: b[0], o: b[1], h: b[2], l: b[3], c: b[4] }));
+        }
+
+        function generateCandles(rng) {
+            const real = getRealCandles();
+            if (real) {
+                masterCandles = real;
+                dataSource = 'real';
+            } else {
+                dataSource = 'synthetic';
+                masterCandles = [];
+                let price = 2350;
+                let trend = 0;
+                let vol = 1.5;
+                const totalCandles = 800;
+
+                for (let i = 0; i < totalCandles; i++) {
+                    if (rng() < 0.02) trend = (rng() - 0.5) * 0.3;
+                    if (rng() < 0.01) vol = 0.5 + rng() * 2;
+
+                    const ret = trend + (rng() - 0.5) * vol;
+                    const open = price;
+                    price = Math.max(1800, Math.min(3500, price * (1 + ret / 100)));
+                    const close = price;
+                    const range = Math.abs(close - open) + rng() * vol * 0.3;
+                    const high = Math.max(open, close) + range * rng();
+                    const low = Math.min(open, close) - range * rng();
+
+                    masterCandles.push({ t: 1735689600 + i * 3600, o: open, h: high, l: low, c: close });
+                }
+            }
+            setRangeInputsBounds();
+        }
+
+        function toInputValue(t) {
+            return new Date((t + klShift()) * 1000).toISOString().slice(0, 16);
+        }
+
+        function setRangeInputsBounds() {
+            if (!masterCandles.length) return;
+            const a = document.getElementById('rangeFrom');
+            const b = document.getElementById('rangeTo');
+            const lo = toInputValue(masterCandles[0].t);
+            const hi = toInputValue(masterCandles[masterCandles.length - 1].t);
+            a.min = lo; a.max = hi;
+            b.min = lo; b.max = hi;
+        }
+
+        function parseRangeInput(id) {
+            const v = document.getElementById(id).value;
+            if (!v) return null;
+            const ms = Date.parse(v + 'Z');
+            return isNaN(ms) ? null : Math.round(ms / 1000) - klShift();
+        }
+
+        function fmtKLFull(t) {
+            const d = new Date((t + klShift()) * 1000);
+            const hh = String(d.getUTCHours()).padStart(2, '0');
+            const mm = String(d.getUTCMinutes()).padStart(2, '0');
+            return String(d.getUTCDate()).padStart(2, '0') + ' ' + KL_MON[d.getUTCMonth()] + ' '
+                + d.getUTCFullYear() + ' ' + hh + ':' + mm;
+        }
+
+        function applyRange() {
+            let fromT = parseRangeInput('rangeFrom');
+            let toT = parseRangeInput('rangeTo');
+            let note = '';
+            if (fromT != null && toT != null && fromT > toT) {
+                const tmp = fromT; fromT = toT; toT = tmp;
+                document.getElementById('rangeFrom').value = toInputValue(fromT);
+                document.getElementById('rangeTo').value = toInputValue(toT);
+                note = 'From was after To - swapped. ';
+            }
+            let sliced = sliceRange(masterCandles, fromT, toT);
+            if (sliced.length === 0 && masterCandles.length > 0) {
+                sliced = masterCandles;
+                note += 'No bars inside the selected range - showing ALL data. ';
+            }
+            priceCandles = sliced;
+            generateTrades();
+            viewEnd = null;
+            viewFollow = true;
+            updateDataBadge();
+            updateViewButtons();
+            updateRangeInfo(note);
+            resetReplay();
+        }
+
+        function clearRange() {
+            document.getElementById('rangeFrom').value = '';
+            document.getElementById('rangeTo').value = '';
+            applyRange();
+        }
+
+        function updateRangeInfo(note) {
+            const el = document.getElementById('rangeInfo');
+            if (!el) return;
+            if (!priceCandles.length) {
+                el.textContent = 'No data loaded.';
+                return;
+            }
+            const pct = (priceCandles.length / masterCandles.length * 100).toFixed(0);
+            el.textContent = (note || '') + priceCandles.length + ' / ' + masterCandles.length
+                + ' bars (' + pct + '%) selected: ' + fmtKLFull(priceCandles[0].t)
+                + ' -> ' + fmtKLFull(priceCandles[priceCandles.length - 1].t) + ' KL';
+        }
+
+        function emaArr(values, period) {
+            const k = 2 / (period + 1);
+            const out = new Array(values.length).fill(null);
+            let prev = null;
+            for (let i = 0; i < values.length; i++) {
+                if (i < period - 1) continue;
+                if (prev === null) {
+                    let s = 0;
+                    for (let j = 0; j < period; j++) s += values[j];
+                    prev = s / period;
+                } else {
+                    prev = values[i] * k + prev * (1 - k);
+                }
+                out[i] = prev;
+            }
+            return out;
+        }
+
+        function atrArr(candles, period) {
+            const out = new Array(candles.length).fill(null);
+            let prev = null, seed = 0;
+            for (let i = 1; i < candles.length; i++) {
+                const c = candles[i], p = candles[i - 1];
+                const tr = Math.max(c.h - c.l, Math.abs(c.h - p.c), Math.abs(c.l - p.c));
+                if (i <= period) {
+                    seed += tr;
+                    if (i === period) { prev = seed / period; out[i] = prev; }
+                } else {
+                    prev = (prev * (period - 1) + tr) / period;
+                    out[i] = prev;
+                }
+            }
+            return out;
+        }
+
+        function sliceRange(candles, fromT, toT) {
+            return candles.filter(c => (fromT == null || c.t >= fromT) && (toT == null || c.t <= toT));
+        }
+
+        // Pure backtest: EMA crossover entries, ATR stop, R:R target, on real candles.
+        // Long if EMA fast crosses above slow, short if crosses below.
+        // Exits: SL/TP hit intrabar (SL checked first = conservative), or reverse signal, or end of data.
+        function simulateTrades(candles, p) {
+            const closes = candles.map(c => c.c);
+            const ef = emaArr(closes, p.emaFast);
+            const es = emaArr(closes, p.emaSlow);
+            const atr = atrArr(candles, 14);
+            const warmup = Math.max(p.emaFast, p.emaSlow, 14) + 1;
+
+            const closed = [];
+            const opens = [];
+            let balance = p.startBalance;
+            let peak = balance;
+            let maxDD = 0;
+            let num = 0;
+
+            const closeTrade = (t, exitPrice, reason, barIdx) => {
+                const move = t.direction === 'LONG' ? exitPrice - t.entryPrice : t.entryPrice - exitPrice;
+                const pnl = move * t.lots * 100;
+                balance += pnl;
+                t.exitPrice = exitPrice;
+                t.pnl = pnl;
+                t.pnlPct = t.entryBalance > 0 ? (pnl / t.entryBalance) * 100 : 0;
+                t.exitBalance = balance;
+                t.status = 'closed';
+                t.isWin = pnl > 0;
+                t.reason = reason;
+                t.exitTime = candles[barIdx].t;
+                peak = Math.max(peak, balance);
+                maxDD = Math.max(maxDD, peak > 0 ? ((peak - balance) / peak) * 100 : 0);
+                closed.push(t);
+            };
+
+            for (let i = warmup; i < candles.length; i++) {
+                const c = candles[i];
+                const crossUp = ef[i] != null && es[i] != null && ef[i - 1] != null && es[i - 1] != null
+                    && ef[i] > es[i] && ef[i - 1] <= es[i - 1];
+                const crossDn = ef[i] != null && es[i] != null && ef[i - 1] != null && es[i - 1] != null
+                    && ef[i] < es[i] && ef[i - 1] >= es[i - 1];
+
+                for (let k = opens.length - 1; k >= 0; k--) {
+                    const t = opens[k];
+                    const tpHit = t.direction === 'LONG' ? c.h >= t.tp : c.l <= t.tp;
+                    const hardHit = t.direction === 'LONG' ? c.l <= t.hard : c.h >= t.hard;
+                    const closeBeyond = t.direction === 'LONG' ? c.c <= t.sl : c.c >= t.sl;
+                    const touchSl = t.direction === 'LONG' ? c.l <= t.sl : c.h >= t.sl;
+                    let exitPx = null, reason = '';
+                    if (hardHit) { exitPx = t.hard; reason = 'SL'; }
+                    else if (tpHit) { exitPx = t.tp; reason = 'TP'; }
+                    else if ((t.direction === 'LONG' && crossDn) || (t.direction === 'SHORT' && crossUp)) {
+                        exitPx = c.c; reason = 'Reverse';
+                    } else if (p.wickProof && closeBeyond) { exitPx = c.c; reason = 'SL'; }
+                    else if (!p.wickProof && touchSl) { exitPx = t.sl; reason = 'SL'; }
+                    if (exitPx !== null) {
+                        closeTrade(t, exitPx, reason, i);
+                        opens.splice(k, 1);
+                    }
+                }
+
+                if (balance <= 0) { balance = 0; break; }
+
+                const dir = crossUp ? 'LONG' : crossDn ? 'SHORT' : null;
+                if (dir && opens.length < p.maxConcurrent && balance > 0 && balance < p.targetBalance && atr[i]) {
+                    const entry = c.c;
+                    const slDist = atr[i] * p.atrStop;
+                    const sl = dir === 'LONG' ? entry - slDist : entry + slDist;
+                    const hard = dir === 'LONG' ? entry - slDist * (p.disasterMult || 1) : entry + slDist * (p.disasterMult || 1);
+                    const tp = dir === 'LONG' ? entry + slDist * p.rrRatio : entry - slDist * p.rrRatio;
+                    const riskAmt = balance * (p.riskPct / 100);
+                    const lots = Math.max(0.01, p.baseLots, Math.floor((riskAmt / (slDist * 100)) * 100) / 100);
+                    num++;
+                    opens.push({
+                        num: num,
+                        direction: dir,
+                        entryPrice: entry,
+                        exitPrice: null,
+                        entryBalance: balance,
+                        exitBalance: null,
+                        lots: lots,
+                        pnl: 0,
+                        pnlPct: 0,
+                        candleIdx: i,
+                        status: 'open',
+                        isWin: false,
+                        sl: sl,
+                        hard: hard,
+                        tp: tp,
+                        entryTime: c.t,
+                        riskAmount: riskAmt,
+                        reason: ''
+                    });
+                }
+            }
+
+            const lastIdx = candles.length - 1;
+            while (opens.length > 0) {
+                const t = opens.pop();
+                closeTrade(t, candles[lastIdx].c, 'EOD', lastIdx);
+            }
+
+            return { closed: closed, finalBalance: balance, maxDD: maxDD, peak: peak };
+        }
+
+        function generateTrades() {
+            const p = {
+                emaFast: parseInt(document.getElementById('emaFast').value) || 9,
+                emaSlow: parseInt(document.getElementById('emaSlow').value) || 21,
+                atrStop: parseFloat(document.getElementById('atrStop').value) || 2,
+                rrRatio: parseFloat(document.getElementById('rrRatio').value) || 2,
+                riskPct: parseFloat(document.getElementById('riskPct').value) || 2,
+                baseLots: parseFloat(document.getElementById('baseLots').value) || 0.01,
+                maxConcurrent: parseInt(document.getElementById('maxConcurrent').value) || 1,
+                startBalance: parseFloat(document.getElementById('startBalance').value) || 500,
+                targetBalance: parseFloat(document.getElementById('targetBalance').value) || 2000,
+                wickProof: document.getElementById('wickProof').checked,
+                disasterMult: parseFloat(document.getElementById('disasterMult').value) || 1.5
+            };
+            const res = simulateTrades(priceCandles, p);
+            allTrades = res.closed;
+            runningPositions = 0;
+            window._lastMaxDD = res.maxDD;
+            window._lastPeakBalance = res.peak;
+        }
+
+        function convertToHeikin(candles) {
+            const ha = [];
+            let prevHA = null;
+            for (let i = 0; i < candles.length; i++) {
+                const c = candles[i];
+                const haClose = (c.o + c.h + c.l + c.c) / 4;
+                const haOpen = i === 0 ? (c.o + c.c) / 2 : (prevHA.o + prevHA.c) / 2;
+                const haHigh = Math.max(c.h, haOpen, haClose);
+                const haLow = Math.min(c.l, haOpen, haClose);
+                const h = { o: haOpen, h: haHigh, l: haLow, c: haClose };
+                ha.push(h);
+                prevHA = h;
+            }
+            return ha;
+        }
+
+        function ensureChartCanvas() {
+            if (chartCanvas && chartCtx && chartCanvas.dataset.bound) return;
+            chartCanvas = document.getElementById('priceChart');
+            chartCanvas.width = chartCanvas.parentElement.clientWidth - 24;
+            chartCanvas.height = 280;
+            chartCtx = chartCanvas.getContext('2d');
+            if (chartCanvas.dataset.bound) return;
+            chartCanvas.dataset.bound = '1';
+
+            let dragging = false, dragX0 = 0, dragEnd0 = 0;
+            chartCanvas.addEventListener('pointerdown', e => {
+                if (!priceCandles.length || !lastCandleW || viewEnd == null) return;
+                dragging = true;
+                dragX0 = e.clientX;
+                dragEnd0 = viewEnd;
+                try { chartCanvas.setPointerCapture(e.pointerId); } catch (err) {}
+                chartCanvas.classList.add('grabbing');
+            });
+            chartCanvas.addEventListener('pointermove', e => {
+                if (!dragging) return;
+                const dx = e.clientX - dragX0;
+                if (Math.abs(dx) < 2) return;
+                const minEnd = Math.min(CHART_WINDOW, priceCandles.length) - 1;
+                let ne = dragEnd0 - Math.round(dx / lastCandleW);
+                ne = Math.max(minEnd, Math.min(priceCandles.length - 1, ne));
+                if (ne !== viewEnd) {
+                    viewEnd = ne;
+                    viewFollow = false;
+                    updateViewButtons();
+                    drawChart();
+                }
+            });
+            const endDrag = () => {
+                if (!dragging) return;
+                dragging = false;
+                chartCanvas.classList.remove('grabbing');
+            };
+            chartCanvas.addEventListener('pointerup', endDrag);
+            chartCanvas.addEventListener('pointercancel', endDrag);
+        }
+
+        function updateViewButtons() {
+            const bf = document.getElementById('btnFollow');
+            const bl = document.getElementById('btnLive');
+            if (!bf || !bl) return;
+            bf.classList.toggle('active', viewFollow);
+            bl.classList.toggle('active', !viewFollow && viewEnd != null && viewEnd >= priceCandles.length - 1);
+        }
+
+        function setViewFollow() {
+            viewFollow = true;
+            updateViewButtons();
+            drawChart();
+        }
+
+        function setViewLive() {
+            viewFollow = false;
+            viewEnd = priceCandles.length - 1;
+            updateViewButtons();
+            drawChart();
+        }
+
+        function klShift() {
+            const h = window.XAUUSD_HISTORY;
+            return 8 * 3600 - (h && h.server_offset ? h.server_offset : 0);
+        }
+
+        const KL_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        function fmtKL(t, spanSec) {
+            const d = new Date((t + klShift()) * 1000);
+            const dd = d.getUTCDate(), mo = KL_MON[d.getUTCMonth()], yy = d.getUTCFullYear();
+            const hh = String(d.getUTCHours()).padStart(2, '0');
+            const mm = String(d.getUTCMinutes()).padStart(2, '0');
+            if (spanSec > 180 * 86400) return mo + ' ' + yy;
+            if (spanSec > 14 * 86400) return dd + ' ' + mo;
+            if (spanSec > 86400) return dd + ' ' + mo + ' ' + hh + ':' + mm;
+            return hh + ':' + mm;
+        }
+
+        function fmtKLDate(t) {
+            return new Date((t + klShift()) * 1000).toISOString().slice(0, 10);
+        }
+
+        function drawChart() {
+            ensureChartCanvas();
+            chartCtx.fillStyle = '#1a1f2e';
+            chartCtx.fillRect(0, 0, chartCanvas.width, chartCanvas.height);
+
+            const n = priceCandles.length;
+            if (n === 0) return;
+
+            const closedTrades = allTrades.filter(t => t.status === 'closed');
+            const minEnd = Math.min(CHART_WINDOW, n) - 1;
+            const maxEnd = n - 1;
+            if (viewEnd == null) viewEnd = minEnd;
+            if (viewFollow) {
+                const tradeIdx = closedTrades.length > 0
+                    ? closedTrades[Math.min(currentTradeIndex, closedTrades.length - 1)].candleIdx
+                    : 0;
+                viewEnd = Math.max(minEnd, Math.min(maxEnd, tradeIdx + 30));
+            }
+            viewEnd = Math.max(minEnd, Math.min(maxEnd, viewEnd));
+            const startIdx = Math.max(0, viewEnd - CHART_WINDOW + 1);
+
+            let visibleCandles = priceCandles.slice(startIdx, viewEnd + 1);
+            if (visibleCandles.length === 0) return;
+
+            if (chartType === 'heiken') visibleCandles = convertToHeikin(visibleCandles);
+
+            const padding = { top: 15, right: 50, bottom: 30, left: 5 };
+            const chartW = chartCanvas.width - padding.left - padding.right;
+            const chartH = chartCanvas.height - padding.top - padding.bottom;
+
+            let allHigh = -Infinity, allLow = Infinity;
+            visibleCandles.forEach(c => {
+                allHigh = Math.max(allHigh, c.h);
+                allLow = Math.min(allLow, c.l);
+            });
+            const range = allHigh - allLow;
+            const pad2 = range * 0.05;
+            allHigh += pad2;
+            allLow -= pad2;
+
+            const candleW = chartW / Math.min(CHART_WINDOW, n);
+            lastCandleW = candleW;
+            const bodyW = Math.max(1, candleW * 0.7);
+
+            chartCtx.strokeStyle = '#2a2f3e';
+            chartCtx.lineWidth = 0.5;
+            for (let i = 0; i < 4; i++) {
+                const y = padding.top + (chartH / 3) * i;
+                chartCtx.beginPath();
+                chartCtx.moveTo(padding.left, y);
+                chartCtx.lineTo(padding.left + chartW, y);
+                chartCtx.stroke();
+
+                const price = allHigh - ((allHigh - allLow) / 3) * i;
+                chartCtx.fillStyle = '#888';
+                chartCtx.font = '9px monospace';
+                chartCtx.textAlign = 'left';
+                chartCtx.fillText(price.toFixed(0), padding.left + chartW + 3, y + 3);
+            }
+
+            visibleCandles.forEach((c, i) => {
+                const x = padding.left + i * candleW + candleW / 2;
+                const yOpen = padding.top + chartH * (1 - (c.o - allLow) / (allHigh - allLow));
+                const yClose = padding.top + chartH * (1 - (c.c - allLow) / (allHigh - allLow));
+                const yHigh = padding.top + chartH * (1 - (c.h - allLow) / (allHigh - allLow));
+                const yLow = padding.top + chartH * (1 - (c.l - allLow) / (allHigh - allLow));
+
+                const isGreen = c.c >= c.o;
+                const color = isGreen ? '#00ff88' : '#ff4444';
+
+                chartCtx.strokeStyle = color;
+                chartCtx.lineWidth = 1;
+                chartCtx.beginPath();
+                chartCtx.moveTo(x, yHigh);
+                chartCtx.lineTo(x, yLow);
+                chartCtx.stroke();
+
+                const bodyTop = Math.min(yOpen, yClose);
+                const bodyHeight = Math.max(1, Math.abs(yClose - yOpen));
+                chartCtx.fillStyle = color;
+                chartCtx.fillRect(x - bodyW / 2, bodyTop, bodyW, bodyHeight);
+            });
+
+            const visibleTrades = closedTrades.slice(0, currentTradeIndex + 1);
+            visibleTrades.forEach(t => {
+                if (t.candleIdx < startIdx || t.candleIdx > viewEnd) return;
+                const x = padding.left + (t.candleIdx - startIdx) * candleW + candleW / 2;
+                const y = padding.top + chartH * (1 - (t.entryPrice - allLow) / (allHigh - allLow));
+
+                chartCtx.fillStyle = t.direction === 'LONG' ? '#00ff88' : '#ff4444';
+                chartCtx.beginPath();
+                if (t.direction === 'LONG') {
+                    chartCtx.moveTo(x, y + 6); chartCtx.lineTo(x - 3, y + 11); chartCtx.lineTo(x + 3, y + 11);
+                } else {
+                    chartCtx.moveTo(x, y - 6); chartCtx.lineTo(x - 3, y - 11); chartCtx.lineTo(x + 3, y - 11);
+                }
+                chartCtx.closePath();
+                chartCtx.fill();
+            });
+
+            // ---- vault markers: every +$100 block banked in the sim walk ----
+            (() => {
+                const startBal = parseFloat(document.getElementById('startBalance').value) || 500;
+                if (!visibleTrades.length) return;
+                let lastBank = startBal, drawn = 0;
+                for (const t of visibleTrades) {
+                    if (t.exitBalance !== undefined && t.exitBalance >= lastBank + 100) {
+                        lastBank = lastBank + 100;   // one marker per 100, not per trade
+                        drawn++;
+                        if (t.candleIdx > startIdx && drawn <= 8) {
+                            const x = padding.left + (t.candleIdx - startIdx) * candleW + candleW / 2;
+                            const y = padding.top + chartH * (1 - (t.exitBalance - allLow) / (allHigh - allLow));
+                            chartCtx.save();
+                            chartCtx.strokeStyle = '#ffd700';
+                            chartCtx.setLineDash([3, 3]);
+                            chartCtx.lineWidth = 1;
+                            chartCtx.beginPath();
+                            chartCtx.moveTo(padding.left, y);
+                            chartCtx.lineTo(padding.left + chartW, y);
+                            chartCtx.stroke();
+                            chartCtx.setLineDash([]);
+                            chartCtx.fillStyle = '#ffd700';
+                            chartCtx.font = 'bold 9px monospace';
+                            chartCtx.textAlign = 'right';
+                            chartCtx.fillText('BANK' + drawn + ' $' + Math.round(t.exitBalance), padding.left + chartW - 4, y - 4);
+                            chartCtx.restore();
+                        }
+                    }
+                }
+            })()
+
+            // bottom time axis (Kuala Lumpur, UTC+8)
+            const tickCount = 6;
+            const spanSec = Math.max(1, priceCandles[viewEnd].t - priceCandles[startIdx].t);
+            chartCtx.strokeStyle = '#3a3f4e';
+            chartCtx.lineWidth = 1;
+            chartCtx.beginPath();
+            chartCtx.moveTo(padding.left, padding.top + chartH);
+            chartCtx.lineTo(padding.left + chartW, padding.top + chartH);
+            chartCtx.stroke();
+            chartCtx.font = '9px monospace';
+            for (let k = 0; k <= tickCount; k++) {
+                const idx = Math.round(startIdx + (viewEnd - startIdx) * k / tickCount);
+                const x = padding.left + (idx - startIdx) * candleW + candleW / 2;
+                if (k > 0 && k < tickCount) {
+                    chartCtx.strokeStyle = '#2a2f3e';
+                    chartCtx.lineWidth = 0.5;
+                    chartCtx.beginPath();
+                    chartCtx.moveTo(x, padding.top);
+                    chartCtx.lineTo(x, padding.top + chartH);
+                    chartCtx.stroke();
+                }
+                chartCtx.fillStyle = '#8fa0b0';
+                chartCtx.textAlign = k === 0 ? 'left' : (k === tickCount ? 'right' : 'center');
+                const labelX = k === 0 ? padding.left + 1 : (k === tickCount ? padding.left + chartW - 1 : x);
+                chartCtx.fillText(fmtKL(priceCandles[idx].t, spanSec), labelX, padding.top + chartH + 14);
+            }
+            chartCtx.textAlign = 'left';
+
+            chartCtx.fillStyle = '#ffd700';
+            chartCtx.font = '9px monospace';
+            chartCtx.fillText(`TF: ${TF_LABELS[currentSpeedProfile]} | View: ${chartType.toUpperCase()} | ${dataSource === 'real' ? 'MT5 real bars' : 'SYNTHETIC'} | times KL (UTC+8) | drag chart to pan`, padding.left + 5, 12);
+            chartCtx.fillStyle = '#556';
+            chartCtx.fillText(`bar ${startIdx + 1}-${viewEnd + 1} / ${n}`, padding.left + 5, chartCanvas.height - 3);
+        }
+
+        function setChartType(type) {
+            chartType = type;
+            document.querySelectorAll('.chart-type-btn:not(.view-btn)').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            drawChart();
+        }
+
+        function updateUI() {
+            const closedTrades = allTrades.filter(t => t.status === 'closed');
+            if (closedTrades.length === 0) {
+                const startBalance = parseFloat(document.getElementById('startBalance').value);
+                document.getElementById('currentBalance').textContent = '$' + startBalance.toFixed(2);
+                document.getElementById('currentPnl').textContent = '$0';
+                document.getElementById('tradeNum').textContent = '0/0';
+                document.getElementById('winRate').textContent = '0%';
+                document.getElementById('stopLossCount').textContent = '0';
+                document.getElementById('profitFactor').textContent = '0';
+                document.getElementById('maxDD').textContent = '0%';
+                document.getElementById('runningTrades').textContent = '0';
+                renderTradeList();
+                drawChart();
+                return;
+            }
+
+            const currentTrade = closedTrades[Math.min(currentTradeIndex, closedTrades.length - 1)];
+            const startBalance = parseFloat(document.getElementById('startBalance').value);
+            const targetBalance = parseFloat(document.getElementById('targetBalance').value);
+
+            const currentBalance = currentTradeIndex === 0 ? startBalance : currentTrade.exitBalance;
+            const profit = currentBalance - startBalance;
+            const progressPct = Math.min(((currentBalance - startBalance) / (targetBalance - startBalance)) * 100, 100);
+
+            const visibleTrades = closedTrades.slice(0, currentTradeIndex + 1);
+            const winsSoFar = visibleTrades.filter(t => t.isWin).length;
+            const winRate = visibleTrades.length > 0 ? (winsSoFar / visibleTrades.length * 100).toFixed(1) : '0';
+            const stopLosses = visibleTrades.filter(t => t.reason === 'SL').length;
+
+            let totalWins = 0, totalLosses = 0;
+            visibleTrades.forEach(t => {
+                if (t.pnl > 0) totalWins += t.pnl;
+                else totalLosses += Math.abs(t.pnl);
+            });
+            const profitFactor = totalLosses > 0 ? (totalWins / totalLosses).toFixed(2) : '∞';
+
+            document.getElementById('currentBalance').textContent = '$' + currentBalance.toFixed(2);
+            document.getElementById('currentPnl').textContent = (profit >= 0 ? '+' : '') + '$' + profit.toFixed(2);
+            document.getElementById('currentPnl').className = 'value ' + (profit >= 0 ? 'positive' : 'negative');
+            document.getElementById('tradeNum').textContent = (currentTradeIndex + 1) + '/' + closedTrades.length;
+            document.getElementById('winRate').textContent = winRate + '%';
+            document.getElementById('stopLossCount').textContent = stopLosses;
+            document.getElementById('profitFactor').textContent = profitFactor;
+            document.getElementById('maxDD').textContent = (window._lastMaxDD || 0).toFixed(1) + '%';
+            document.getElementById('runningTrades').textContent = runningPositions;
+
+            document.getElementById('progressFill').style.width = progressPct + '%';
+            document.getElementById('progressFill').textContent = progressPct.toFixed(0) + '%';
+            document.getElementById('startLabel').textContent = '$' + startBalance.toFixed(0);
+            document.getElementById('targetLabel').textContent = '$' + targetBalance.toFixed(0) + ' (Target)';
+
+            renderTradeList();
+            drawChart();
+        }
+
+        function renderTradeList() {
+            const container = document.getElementById('tradeList');
+            container.innerHTML = '';
+
+            const closedTrades = allTrades.filter(t => t.status === 'closed');
+            const tradesToShow = closedTrades.slice(0, currentTradeIndex + 1).reverse().slice(0, 50);
+
+            tradesToShow.forEach((t, i) => {
+                const div = document.createElement('div');
+                div.className = 'trade-item ' + (t.isWin ? 'win' : 'loss');
+                if (i === 0 && currentTradeIndex < closedTrades.length - 1) div.classList.add('current');
+
+                div.innerHTML = `
+                    <div class="trade-num">#${t.num}</div>
+                    <div>
+                        <span class="trade-dir ${t.direction.toLowerCase()}">${t.direction}</span>
+                        <span style="color:#ffd700;">${t.lots.toFixed(2)}L</span>
+                        <span style="color:#888;">${t.reason}</span>
+                    </div>
+                    <div class="trade-pnl ${t.isWin ? 'positive' : 'negative'}">${t.pnl >= 0 ? '+' : ''}$${t.pnl.toFixed(1)}</div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            document.getElementById('btnPlay').textContent = isPlaying ? 'Pause' : 'Play';
+            if (isPlaying) animate();
+            else cancelAnimationFrame(animationId);
+        }
+
+        function animate() {
+            if (!isPlaying) return;
+            const closedTrades = allTrades.filter(t => t.status === 'closed');
+            if (currentTradeIndex < closedTrades.length - 1) {
+                currentTradeIndex++;
+                updateUI();
+                setTimeout(() => { if (isPlaying) animationId = requestAnimationFrame(animate); }, 700 / playbackSpeed);
+            } else {
+                isPlaying = false;
+                document.getElementById('btnPlay').textContent = 'Play';
+            }
+        }
+
+        function resetReplay() {
+            isPlaying = false;
+            cancelAnimationFrame(animationId);
+            currentTradeIndex = 0;
+            document.getElementById('btnPlay').textContent = 'Play';
+            updateUI();
+        }
+
+        function stepForward() {
+            const closedTrades = allTrades.filter(t => t.status === 'closed');
+            if (currentTradeIndex < closedTrades.length - 1) {
+                currentTradeIndex++;
+                updateUI();
+            }
+        }
+
+        function updatePlaybackSpeed() {
+            playbackSpeed = parseInt(document.getElementById('playbackSpeed').value) / 10;
+            document.getElementById('playbackLabel').textContent = playbackSpeed.toFixed(1) + 'x';
+        }
+
+        // ---------- auto-recalc: tuning inputs now ACTUALLY drive the backtest ----------
+        // (bug: generateTrades() only ran on TF switch / Apply — tweaked inputs
+        //  silently replayed stale trades. User's assumption of auto-apply was right.)
+        let recalcTimer = null, simNoteTimer = null;
+
+        function simToast(prefix) {
+            const closed = allTrades.filter(t => t.status === 'closed');
+            let w = 0, l = 0;
+            closed.forEach(t => { if (t.pnl > 0) w += t.pnl; else l += Math.abs(t.pnl); });
+            const pf = l > 0 ? (w / l).toFixed(2) : (closed.length ? 'INF' : '0');
+            const bal = closed.length ? closed[closed.length - 1].exitBalance
+                : (+document.getElementById('startBalance').value || 500);
+            const el = document.getElementById('simNote');
+            if (!el) return;
+            el.innerHTML = (prefix || '') + '✓ recalculated ' + new Date().toLocaleTimeString('en-GB')
+                + ' · TF ' + (TF_LABELS[currentSpeedProfile] || currentSpeedProfile)
+                + ' · ' + closed.length + ' trades · final $' + (+bal).toFixed(2)
+                + ' · PF ' + pf + ' · DD ' + (window._lastMaxDD || 0).toFixed(1) + '%'
+                + ' · ' + closed.filter(t => t.reason === 'SL').length + ' SL';
+            el.style.opacity = '1';
+            el.style.color = '#9aa4b2';
+            clearTimeout(simNoteTimer);
+            simNoteTimer = setTimeout(() => { el.style.opacity = '0.45'; }, 5000);
+        }
+
+        function recalc(toast) {
+            generateTrades();
+            resetReplay();                      // index 0 + updateUI (stats + chart redraw)
+            if (toast) simToast('');
+        }
+
+        (function wireTuningInputs() {
+            const ids = ['emaFast', 'emaSlow', 'atrStop', 'rrRatio', 'riskPct', 'baseLots',
+                'maxConcurrent', 'disasterMult', 'startBalance', 'targetBalance'];
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('input', () => {          // live while typing
+                    clearTimeout(recalcTimer);
+                    recalcTimer = setTimeout(() => recalc(false), 200);
+                });
+                el.addEventListener('change', () => recalc(true)); // committed
+            });
+            const wp = document.getElementById('wickProof');
+            if (wp) wp.addEventListener('change', () => recalc(true));
+        })();
+
+        function autoTune() {
+            const log = document.getElementById('dbLog');
+            log.innerHTML = '<div style="color:#ffd700;">Running 50 parameter combinations...</div>';
+
+            const originalConfig = {
+                emaFast: document.getElementById('emaFast').value,
+                emaSlow: document.getElementById('emaSlow').value,
+                atrStop: document.getElementById('atrStop').value,
+                rrRatio: document.getElementById('rrRatio').value,
+                riskPct: document.getElementById('riskPct').value,
+                seed: currentSeed
+            };
+
+            const results = [];
+            const fastValues = [5, 7, 9, 12, 15];
+            const slowValues = [18, 21, 26, 34, 50];
+            const atrValues = [2.0, 2.5, 3.0];
+
+            let count = 0;
+            const total = fastValues.length * slowValues.length * atrValues.length;
+
+            for (const fast of fastValues) {
+                for (const slow of slowValues) {
+                    if (slow <= fast) continue;
+                    for (const atr of atrValues) {
+                        document.getElementById('emaFast').value = fast;
+                        document.getElementById('emaSlow').value = slow;
+                        document.getElementById('atrStop').value = atr;
+
+                        const testSeed = 12345;
+                        document.getElementById('seedInput').value = testSeed;
+                        regenerate();
+                        const trades = allTrades.filter(t => t.status === 'closed');
+                        if (trades.length > 0) {
+                            const wins = trades.filter(t => t.isWin).length;
+                            const winRate = (wins / trades.length * 100);
+                            const stopLosses = trades.filter(t => t.reason === 'SL').length;
+                            const stopLossRate = (stopLosses / trades.length * 100);
+                            const finalBal = trades[trades.length - 1].exitBalance;
+
+                            results.push({
+                                fast, slow, atr,
+                                trades: trades.length,
+                                winRate,
+                                stopLossRate,
+                                finalBalance: finalBal,
+                                score: finalBal * (winRate / 100)
+                            });
+                        }
+                        count++;
+                    }
+                }
+            }
+
+            results.sort((a, b) => b.score - a.score);
+
+            document.getElementById('emaFast').value = originalConfig.emaFast;
+            document.getElementById('emaSlow').value = originalConfig.emaSlow;
+            document.getElementById('atrStop').value = originalConfig.atrStop;
+            document.getElementById('seedInput').value = originalConfig.seed;
+            regenerate();
+
+            log.innerHTML = '<div style="color:#ffd700; font-weight:bold;">AUTO-TUNE COMPLETE — Top 5 Combos:</div>';
+            results.slice(0, 5).forEach((r, i) => {
+                log.innerHTML += `<div class="db-entry improvement">#${i+1}: EMA(${r.fast}/${r.slow}) ATR=${r.atr} | ${r.trades} trades | WR:${r.winRate.toFixed(1)}% | SL:${r.stopLossRate.toFixed(1)}% | $${r.finalBalance.toFixed(0)}</div>`;
+            });
+            log.innerHTML += '<div style="color:#888; margin-top:8px;">Top combo applied to controls. Try different seeds to validate!</div>';
+
+            if (results.length > 0) {
+                document.getElementById('emaFast').value = results[0].fast;
+                document.getElementById('emaSlow').value = results[0].slow;
+                document.getElementById('atrStop').value = results[0].atr;
+                document.getElementById('seedInput').value = 'random';
+                regenerate();
+            }
+        }
+
+        function saveToDB() {
+            const closedTrades = allTrades.filter(t => t.status === 'closed');
+            if (closedTrades.length === 0) return;
+
+            const wins = closedTrades.filter(t => t.isWin).length;
+            const stopLosses = closedTrades.filter(t => t.reason === 'SL').length;
+            const finalBal = closedTrades[closedTrades.length - 1].exitBalance;
+            const startBal = parseFloat(document.getElementById('startBalance').value);
+
+            const runData = {
+                timestamp: new Date().toISOString(),
+                seed: currentSeed,
+                range: {
+                    from: document.getElementById('rangeFrom').value || 'all',
+                    to: document.getElementById('rangeTo').value || 'all',
+                    bars: priceCandles.length
+                },
+                params: {
+                    emaFast: document.getElementById('emaFast').value,
+                    emaSlow: document.getElementById('emaSlow').value,
+                    atrStop: document.getElementById('atrStop').value,
+                    rrRatio: document.getElementById('rrRatio').value,
+                    riskPct: document.getElementById('riskPct').value,
+                    timeframe: currentSpeedProfile
+                },
+                results: {
+                    trades: closedTrades.length,
+                    winRate: (wins / closedTrades.length * 100).toFixed(1),
+                    stopLossRate: (stopLosses / closedTrades.length * 100).toFixed(1),
+                    finalBalance: finalBal.toFixed(2),
+                    return: ((finalBal - startBal) / startBal * 100).toFixed(1),
+                    maxDD: (window._lastMaxDD || 0).toFixed(1)
+                }
+            };
+
+            let db = JSON.parse(localStorage.getItem('xau_journey_db') || '[]');
+            db.push(runData);
+            localStorage.setItem('xau_journey_db', JSON.stringify(db));
+
+            updateDBDisplay();
+        }
+
+        function updateDBDisplay() {
+            const db = JSON.parse(localStorage.getItem('xau_journey_db') || '[]');
+            const log = document.getElementById('dbLog');
+            const best = document.getElementById('bestRuns');
+
+            if (db.length === 0) {
+                log.innerHTML = '<div style="color:#666;">No saved runs yet. Run, then "Save Current Run".</div>';
+                best.innerHTML = '<div style="color:#666;">Saved runs will appear here ranked by performance.</div>';
+                return;
+            }
+
+            log.innerHTML = `<div style="color:#ffd700;">${db.length} runs saved</div>`;
+            db.slice(-5).reverse().forEach(r => {
+                const improvement = parseFloat(r.results.return) > 0;
+                log.innerHTML += `<div class="db-entry ${improvement ? 'improvement' : 'decline'}">
+                    ${r.timestamp.substring(11, 19)} | EMA${r.params.emaFast}/${r.params.emaSlow} ATR${r.params.atrStop} | ${r.results.return}% (${r.results.trades} trades, ${r.results.winRate}% WR)
+                </div>`;
+            });
+
+            const sorted = [...db].sort((a, b) => parseFloat(b.results.return) - parseFloat(a.results.return));
+            best.innerHTML = '';
+            sorted.slice(0, 5).forEach((r, i) => {
+                best.innerHTML += `<div style="padding:6px; background:#0d1117; border-radius:4px; margin:4px 0; font-size:10px;">
+                    <strong style="color:#ffd700;">#${i+1}</strong> ${r.results.return}% return | EMA${r.params.emaFast}/${r.params.emaSlow} | TF:${r.params.timeframe} | WR:${r.results.winRate}% | DD:${r.results.maxDD}%
+                </div>`;
+            });
+        }
+
+        function exportDB() {
+            const db = JSON.parse(localStorage.getItem('xau_journey_db') || '[]');
+            const blob = new Blob([JSON.stringify(db, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'xau_trading_db.json';
+            a.click();
+        }
+
+        function clearDB() {
+            if (confirm('Clear all saved runs?')) {
+                localStorage.removeItem('xau_journey_db');
+                updateDBDisplay();
+            }
+        }
+
+        // ---------- LIVE COCKPIT (godmode bridge -> mt5_bot_v2) ----------
+        const BRIDGE = 'http://127.0.0.1:8765';
+        let cockpitSeenResult = 0;
+
+        // ---------- live feedback layer: every action leaves a receipt ----------
+        const actRows = [];
+        function actLog(kind, msg) {
+            actRows.unshift({t: new Date().toLocaleTimeString('en-GB'), kind: kind, msg: msg});
+            if (actRows.length > 40) actRows.pop();
+            const el = document.getElementById('actLog');
+            if (!el) return;
+            el.innerHTML = actRows.map(r =>
+                '<div class="row ' + r.kind + '"><span class="t">' + r.t + '</span>' +
+                '<span class="m">' + r.msg + '</span></div>').join('');
+        }
+        function setBusy(id, busy) {
+            const b = document.getElementById(id);
+            if (!b) return;
+            b.classList.toggle('busy', !!busy);
+            b.disabled = !!busy || b.dataset.blocked === '1';
+        }
+        function why(txt) {
+            const el = document.getElementById('cockpitWhy');
+            if (el) el.textContent = txt || '';
+        }
+        function chip(label, state) {
+            return '<span class="chip ' + state + '"><span class="led"></span>' + label + '</span>';
+        }
+        function fmtTF(tf) { return TF_LABELS[tf] || tf || '?'; }
+
+        // state the last poll filled in - drives button enable/disable
+        const liveState = {bridge: false, bot: false, algo: null, equity: null, tf: null};
+
+        // ---- "what is the bot ACTUALLY running" truth strip ----
+        let lastRunningSig = null, runningSince = null;
+
+        function runningSig(c) {
+            return JSON.stringify([c.timeframe, c.ema_fast, c.ema_slow, c.atr_stop_mult,
+                c.rr_ratio, c.risk_pct, c.base_lots, c.max_concurrent, c.profit_target_usd,
+                c.gates && c.gates.breakout_n, c.gates && c.gates.breakeven_r]);
+        }
+
+        function renderRunningStrategy(c) {
+            const el = document.getElementById('liveStrategy');
+            if (!el || !c) return;
+            const g = c.gates || {};
+            const gatesTxt = g.breakout_n ? 'breakout' + g.breakout_n : 'nobreakout';
+            el.innerHTML = '<span style="color:#667;">RUNNING:</span> '
+                + '<b style="color:#ffd700;">' + fmtTF(c.timeframe) + '</b>'
+                + ' · EMA <b>' + c.ema_fast + '/' + c.ema_slow + '</b>'
+                + ' · stop ×<b>' + c.atr_stop_mult + '</b>'
+                + ' · RR <b>' + c.rr_ratio + '</b>'
+                + ' · risk <b>' + c.risk_pct + '%</b>'
+                + ' · ' + c.base_lots + ' lots · max ' + c.max_concurrent
+                + ' · gates: <span style="color:#c58fff;">' + gatesTxt
+                + (g.breakeven_r ? ' +BE' + g.breakeven_r + 'R' : '')
+                + (g.atr_expansion ? ' +ATRexp' : '') + '</span>';
+            const sig = runningSig(c);
+            if (sig !== lastRunningSig) {
+                if (lastRunningSig !== null) {
+                    const old = JSON.parse(lastRunningSig), nu = JSON.parse(sig);
+                    const diff = [];
+                    const names = ['TF', 'emaF', 'emaS', 'stop', 'RR', 'risk%', 'lots', 'max', 'target', 'gates', 'gates'];
+                    nu.forEach((v, i) => { if (String(v) !== String(old[i])) diff.push(names[i] + ' ' + old[i] + '→' + v); });
+                    actLog('info', 'bot config CHANGED: ' + (diff.join(', ') || '(unknown fields)'));
+                }
+                lastRunningSig = sig;
+                runningSince = new Date().toLocaleTimeString('en-GB');
+            }
+            const note = document.getElementById('liveStrategyNote');
+            if (note) note.textContent = 'running since ' + runningSince + ' · read from the bot itself every 5s (not from a file, not from MT5)';
+
+            // divergence alarm: dashboard inputs vs the bot's real config
+            try {
+                const mine = collectStrategy();
+                const diverged = ['timeframe', 'ema_fast', 'ema_slow', 'atr_stop_mult',
+                    'rr_ratio', 'risk_pct', 'max_concurrent']
+                    .some(k => String(mine[k]) !== String(c[k]));
+                if (diverged) {
+                    el.style.borderColor = '#ffd166';
+                    el.insertAdjacentHTML('beforeend',
+                        '<div style="color:#ffd166; font-size:9.5px; margin-top:3px;">⚠ dashboard inputs DIFFER from the running bot — click Push Strategy to sync, or ★ BEST preset</div>');
+                } else {
+                    el.style.borderColor = '#22283a';
+                }
+            } catch (e) { /* inputs not ready yet */ }
+        }
+
+        function cockpitMsg(txt, bad) {
+            actLog(bad ? 'err' : 'ok', txt);
+        }
+
+        async function bridgeFetch(path, opts) {
+            const ctl = new AbortController();
+            const t = setTimeout(() => ctl.abort(), 6000);
+            try {
+                const r = await fetch(BRIDGE + path, Object.assign({}, opts, {signal: ctl.signal}));
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return await r.json();
+            } finally {
+                clearTimeout(t);
+            }
+        }
+
+        function collectStrategy() {
+            return {
+                symbol: 'XAUUSD',
+                timeframe: currentSpeedProfile,
+                ema_fast: +document.getElementById('emaFast').value || 9,
+                ema_slow: +document.getElementById('emaSlow').value || 21,
+                atr_stop_mult: +document.getElementById('atrStop').value || 2,
+                rr_ratio: +document.getElementById('rrRatio').value || 2,
+                risk_pct: +document.getElementById('riskPct').value || 2,
+                max_concurrent: +document.getElementById('maxConcurrent').value || 2,
+                base_lots: +document.getElementById('baseLots').value || 0.01,
+                wick_proof_stop: document.getElementById('wickProof').checked,
+                disaster_stop_mult: +document.getElementById('disasterMult').value || 1.5,
+                profit_target_usd: +document.getElementById('profitTarget').value || 0
+            };
+        }
+
+        function describeStrategy(c) {
+            return 'TF ' + fmtTF(c.timeframe) + ' · EMA ' + c.ema_fast + '/' + c.ema_slow
+                + ' · stop x' + c.atr_stop_mult + ' · RR ' + c.rr_ratio
+                + ' · risk ' + c.risk_pct + '% · max ' + c.max_concurrent + ' pos';
+        }
+
+        // show EXACTLY what will be sent, and mark what actually changes
+        async function renderPushPreview() {
+            const el = document.getElementById('pushPreview');
+            if (!el) return;
+            const cfg = collectStrategy();
+            if (cfg.ema_fast >= cfg.ema_slow) {
+                el.innerHTML = '<div class="hdr">cannot push</div><div class="kv"><span class="k">problem</span>'
+                    + '<span class="v" style="color:#ff6b6b">EMA fast (' + cfg.ema_fast
+                    + ') must be below EMA slow (' + cfg.ema_slow + ')</span></div>';
+                return;
+            }
+            let live = null;
+            try { live = await bridgeFetch('/api/config'); } catch (e) { /* bridge down */ }
+            const rows = [
+                ['Signal timeframe', fmtTF(cfg.timeframe) + '  (from chart selector)'],
+                ['EMA', cfg.ema_fast + ' / ' + cfg.ema_slow],
+                ['ATR stop', 'x' + cfg.atr_stop_mult + '   disaster x' + cfg.disaster_stop_mult],
+                ['Target', cfg.rr_ratio + 'R'],
+                ['Risk / size', cfg.risk_pct + '% · max ' + cfg.max_concurrent + ' pos · base ' + cfg.base_lots],
+                ['Wick-proof stop', cfg.wick_proof_stop ? 'ON' : 'OFF'],
+                ['Profit target', '$' + cfg.profit_target_usd]
+            ];
+            let html = '<div class="hdr">will send to bot (bot hot-reloads in ~5s, open trades untouched)</div>';
+            rows.forEach(r => {
+                html += '<div class="kv"><span class="k">' + r[0] + '</span><span class="v">' + r[1] + '</span></div>';
+            });
+            if (live) {
+                const g = live.gates || {};
+                const gtxt = (g.breakout_n ? 'breakout ' + g.breakout_n : 'no breakout')
+                    + ' · ATR-expansion ' + (g.atr_expansion ? 'ON' : 'OFF')
+                    + ' · breakeven ' + (g.breakeven_r ? g.breakeven_r + 'R' : 'OFF');
+                html += '<div class="hdr" style="margin-top:7px">kept as-is (not on this form)</div>';
+                html += '<div class="kv"><span class="k">Entry gates</span><span class="v"><em>' + gtxt + '</em></span></div>';
+                const changed = ['timeframe', 'ema_fast', 'ema_slow', 'atr_stop_mult', 'rr_ratio',
+                    'risk_pct', 'max_concurrent', 'wick_proof_stop', 'profit_target_usd']
+                    .filter(k => String(live[k]) !== String(cfg[k]));
+                html += '<div class="hdr" style="margin-top:7px">changes: '
+                    + (changed.length ? '<span style="color:#ffd166">' + changed.length + ' field(s) differ from what the bot runs now</span>'
+                        : '<span style="color:#8bd17c">nothing - bot already runs exactly this</span>') + '</div>';
+            } else {
+                html += '<div class="hdr" style="margin-top:7px;color:#ff9f9f">'
+                    + 'bridge offline - cannot read current bot config, cannot push</div>';
+            }
+            el.innerHTML = html;
+        }
+
+        function verifyBotHas(cfg, tries) {
+            // proof = the RUNNING bot reports these values, not just the file on disk
+            return bridgeFetch('/api/status').then(s => {
+                const live = (s && s.config) || {};
+                const age = Math.max(0, Math.round((Date.now() - new Date(s.timestamp).getTime()) / 1000));
+                if (age >= 30) throw new Error('bot not running (heartbeat ' + age + 's old)');
+                const match = ['timeframe', 'ema_fast', 'ema_slow', 'atr_stop_mult', 'rr_ratio',
+                    'risk_pct', 'max_concurrent', 'profit_target_usd']
+                    .every(k => String(live[k]) === String(cfg[k]));
+                if (match) return true;
+                if ((tries || 0) > 0) {
+                    return new Promise(r => setTimeout(r, 2000)).then(() => verifyBotHas(cfg, tries - 1));
+                }
+                return false;
+            });
+        }
+
+        async function pushStrategy() {
+            const btn = document.getElementById('btnPushStrategy');
+            const cfg = collectStrategy();
+            if (cfg.ema_fast >= cfg.ema_slow) {
+                cockpitMsg('✗ not pushed - EMA fast (' + cfg.ema_fast + ') must be below EMA slow (' + cfg.ema_slow + ')', true);
+                renderPushPreview();
+                return;
+            }
+            setBusy('btnPushStrategy', true);
+            actLog('info', 'pushing strategy: ' + describeStrategy(cfg));
+            try {
+                const res = await bridgeFetch('/api/config', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(cfg)
+                });
+                const saved = (res && res.config) || cfg;
+                let verified = false, whyNot = '';
+                try {
+                    verified = await verifyBotHas(cfg, 5);
+                } catch (e) {
+                    whyNot = ' (' + e.message + ')';
+                }
+                if (verified) {
+                    cockpitMsg('✓ pushed &amp; CONFIRMED — running bot now reports: ' + describeStrategy(saved));
+                } else {
+                    cockpitMsg('⚠ saved to file' + whyNot + ', but the running bot has not picked it up after 10s. '
+                        + 'If the bot is stopped, start it — it reads this file on boot.', true);
+                }
+                renderPushPreview();
+            } catch (e) {
+                cockpitMsg('✗ push failed: ' + e.message + ' — is godmode\\bridge.py running?', true);
+            } finally {
+                setBusy('btnPushStrategy', false);
+            }
+        }
+
+        const PROFILES = {
+            proven: {
+                label: 'PROVEN 1-min', tf: '1min', ema_fast: 15, ema_slow: 34,
+                atr_stop_mult: 2.5, rr_ratio: 3, risk_pct: 2, max_concurrent: 2,
+                gates: {breakout_n: 20, atr_expansion: true, atr_expansion_period: 50, breakeven_r: 1.0}
+            },
+            proven15: {
+                label: 'PROVEN 15-min', tf: '15min', ema_fast: 15, ema_slow: 34,
+                atr_stop_mult: 4, rr_ratio: 5, risk_pct: 2, max_concurrent: 2,
+                gates: {breakout_n: 20, atr_expansion: true, atr_expansion_period: 50, breakeven_r: 1.0}
+            },
+            aggressive: {
+                label: 'YOUR aggressive', tf: '1min', ema_fast: 15, ema_slow: 21,
+                atr_stop_mult: 4, rr_ratio: 5, risk_pct: 5, max_concurrent: 3,
+                gates: {breakout_n: 20, atr_expansion: true, atr_expansion_period: 50, breakeven_r: 1.0}
+            }
+        };
+
+        function syncStrategyInputs(p) {
+            // fill the Strategy Tuning form from a profile so the page sim,
+            // the visible inputs and the live bot all tell the same story
+            const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+            set('emaFast', p.ema_fast);
+            set('emaSlow', p.ema_slow);
+            set('atrStop', p.atr_stop_mult);
+            set('rrRatio', p.rr_ratio);
+            set('riskPct', p.risk_pct);
+            set('maxConcurrent', p.max_concurrent);
+            set('baseLots', 0.01);
+            set('disasterMult', 1.5);
+            const wp = document.getElementById('wickProof');
+            if (wp) wp.checked = true;
+            set('profitTarget', 100);
+            if (currentSpeedProfile !== p.tf) selectSpeed(p.tf);   // regenerates sim
+            else recalc(true);
+        }
+
+        function applyBestPreset() {
+            actLog('info', 'BEST preset: loading into sim + pushing to bot...');
+            syncStrategyInputs(PROFILES.proven);
+            pushProfile('proven');
+        }
+
+        async function pushProfile(key) {
+            const p = PROFILES[key];
+            if (!p) return;
+            const msg = document.getElementById('patternMsg');
+            msg.style.color = '#8bd17c';
+            msg.textContent = 'pushing ' + p.label + '...';
+            actLog('info', 'pushing profile ' + p.label + ' (' + fmtTF(p.tf) + ', EMA ' + p.ema_fast + '/' + p.ema_slow + ')');
+            try {
+                const cur = await bridgeFetch('/api/config');
+                const cfg = Object.assign({}, cur, {
+                    symbol: 'XAUUSD', timeframe: p.tf, ema_fast: p.ema_fast, ema_slow: p.ema_slow,
+                    atr_stop_mult: p.atr_stop_mult, rr_ratio: p.rr_ratio, risk_pct: p.risk_pct,
+                    max_concurrent: p.max_concurrent,
+                    wick_proof_stop: true, disaster_stop_mult: 1.5, gates: p.gates
+                });
+                await bridgeFetch('/api/config', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(cfg)
+                });
+                let ok = false, whyNot = '';
+                try { ok = await verifyBotHas(cfg, 5); } catch (e) { whyNot = ' (' + e.message + ')'; }
+                if (ok) {
+                    msg.textContent = '✓ ' + p.label + ' CONFIRMED live on the running bot';
+                    cockpitMsg('✓ profile applied &amp; confirmed: ' + p.label + ' — ' + describeStrategy(cfg));
+                    syncStrategyInputs(p);
+                } else {
+                    msg.style.color = '#ff9f9f';
+                    msg.textContent = '⚠ saved but unconfirmed' + whyNot;
+                    cockpitMsg('⚠ ' + p.label + ' saved to file' + whyNot + ' but the running bot has not confirmed it.', true);
+                }
+                renderPushPreview();
+            } catch (e) {
+                msg.style.color = '#ff9f9f';
+                msg.textContent = 'Push failed: ' + e.message;
+                cockpitMsg('✗ profile push failed: ' + e.message, true);
+            }
+        }
+
+        function sendCmd(action) {
+            const lots = +document.getElementById('cockpitLots').value || 0.01;
+            const id = Date.now();
+            const verb = action === 'buy' ? 'BUY' : (action === 'sell' ? 'SELL' : 'CLOSE ALL');
+            const btn = {buy: 'btnBuy', sell: 'btnSell', close_all: 'btnCloseAll'}[action];
+            const label = action === 'close_all' ? verb + ' (' + 'all open positions' + ')' : verb + ' ' + lots + ' XAUUSD';
+            setBusy(btn, true);
+            actLog('info', 'sending ' + label + ' ...');
+            cockpitPendingCmd = {id: id, label: label, btn: btn};
+            bridgeFetch('/api/cmd', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: id, action: action, lots: lots})})
+                .then(() => actLog('wait', label + ' queued — waiting for the broker to confirm (up to 15s)'))
+                .catch(e => {
+                    cockpitMsg('✗ ' + verb + ' failed to send: ' + e.message, true);
+                    setBusy(btn, false);
+                });
+        }
+
+        let cockpitPendingCmd = null;
+
+        async function cockpitPoll() {
+            const dot = document.getElementById('liveDot');
+            const st = document.getElementById('liveStatus');
+            const warn = document.getElementById('autoTradeWarn');
+            const cs = document.getElementById('consoleState');
+            try {
+                const s = await bridgeFetch('/api/status');
+                const age = Math.max(0, Math.round((Date.now() - new Date(s.timestamp).getTime()) / 1000));
+                const alive = age < 30;
+                dot.style.background = alive ? '#00ff88' : '#ff6b6b';
+                const cd = s.cooldown || {};
+                const eq = cd.broker_equity != null ? cd.broker_equity : (s.account ? s.account.equity : null);
+                const bal = cd.broker_balance != null ? cd.broker_balance : (s.account ? s.account.balance : null);
+                const posN = cd.open_positions_broker != null ? cd.open_positions_broker : (s.positions ? s.positions.length : '?');
+                const L = s.learning;
+                const liveTf = (s.config && s.config.timeframe) || '?';
+                const algo = cd.autotrading;
+                liveState.bridge = true;
+                liveState.bot = alive;
+                liveState.algo = algo;
+                liveState.equity = eq;
+                liveState.tf = liveTf;
+
+                // ---- one-glance answer to "is it actually live?" ----
+                document.getElementById('liveChips').innerHTML =
+                    chip('BRIDGE', 'ok')
+                    + chip(alive ? 'BOT RUNNING' : 'BOT DEAD', alive ? 'ok' : 'bad')
+                    + chip(algo === false ? 'AUTOTRADE OFF' : (algo ? 'AUTOTRADE ON' : 'AUTOTRADE ?'),
+                        algo === false ? 'bad' : (algo ? 'ok' : 'warn'))
+                    + chip('TF ' + fmtTF(liveTf), alive ? 'ok' : 'idle')
+                    + chip('EQUITY $' + (eq != null ? (+eq).toFixed(2) : '?'), eq != null ? 'ok' : 'idle')
+                    + chip(posN + ' OPEN', posN ? 'warn' : 'idle')
+                    + (cd.profit_guard ? chip('GUARD $' + cd.profit_guard.target, 'warn') : chip('GUARD OFF', 'bad'));
+                renderRunningStrategy(s.config);
+
+                // ---- MAIN WALLET: banked $100 blocks (bot's own book) ----
+                const mw = cd.main_wallet;
+                if (mw) {
+                    document.getElementById('mwTotal').textContent = '$' + (+mw.total || 0).toFixed(2);
+                    document.getElementById('mwToday').textContent = (mw.today || 0) + ' block' + (mw.today === 1 ? '' : 's') + ' today';
+                    document.getElementById('mwNext').textContent = cd.profit_guard
+                        ? 'next target: equity $' + cd.profit_guard.target : '';
+                    const bl = (mw.blocks || []).slice(-6).reverse();
+                    document.getElementById('mwBlocks').innerHTML = bl.length
+                        ? '<span style="color:#667;">recent banks:</span> ' + bl.map(b =>
+                            '✓ $' + b.amount + ' @ ' + (b.t || '').substring(11, 16) + ' (eq $' + b.equity_at_bank + ')').join(' · ')
+                        : '<span style="color:#667;">vault empty — first block hunting in progress</span>';
+                }
+
+                document.getElementById('cockpitEquity').value = '$' + (eq != null ? (+eq).toFixed(2) : '?') + ' / $' + (bal != null ? (+bal).toFixed(2) : '?');
+                document.getElementById('cockpitRadar').value = s.radar ? s.radar.mode : '?';
+                document.getElementById('cockpitPos').value = posN;
+                warn.style.display = (algo === false) ? 'block' : 'none';
+                st.textContent = (s.mode || '?').toUpperCase() + ' · bot trades ' + fmtTF(liveTf) + ' · heartbeat ' + age + 's ago · radar ' + (s.radar ? s.radar.mode : '?')
+                    + (cd.profit_guard ? ' · guard: stop at $' + cd.profit_guard.target : '')
+                    + (L ? ' · learner: ' + L.trades_in_db + ' trades, ' + (L.rules ? L.rules.length : 0) + ' filters' : '');
+                st.style.color = alive ? '#8bd17c' : '#ff6b6b';
+                if (cs) {
+                    cs.textContent = alive ? '● live · heartbeat ' + age + 's ago · ' + fmtTF(liveTf)
+                        : '○ bot is NOT running (last heartbeat ' + age + 's ago) - press Start Bot';
+                    cs.style.color = alive ? '#00ff88' : '#ff6b6b';
+                }
+
+                // ---- buttons: honest about whether they can work ----
+                const blocked = (id, cond, reason) => {
+                    const b = document.getElementById(id);
+                    if (!b) return;
+                    b.dataset.blocked = cond ? '1' : '0';
+                    if (!b.classList.contains('busy')) b.disabled = cond;
+                    if (cond) b.title = reason; else b.title = '';
+                };
+                const tradeBlock = !alive ? 'bot is not running - press Start Bot'
+                    : (algo === false ? 'AutoTrading is OFF in MT5 (Ctrl+E)' : '');
+                blocked('btnBuy', !!tradeBlock, tradeBlock);
+                blocked('btnSell', !!tradeBlock, tradeBlock);
+                blocked('btnCloseAll', !alive ? 'bot is not running - it executes the close' : '', !alive);
+                blocked('btnStartBot', alive, 'bot is already running');
+                blocked('btnPushStrategy', false, '');
+                why(tradeBlock || '');
+                if (alive) renderPushPreview();
+
+                // ---- did the broker actually do what the button asked? ----
+                try {
+                    const r = await bridgeFetch('/api/cmd-result');
+                    if (r && r.id && r.id !== cockpitSeenResult) {
+                        cockpitSeenResult = r.id;
+                        if (cockpitPendingCmd && r.id === cockpitPendingCmd.id) {
+                            actLog(r.ok ? 'ok' : 'err', (r.ok ? '✓ ' : '✗ ') + cockpitPendingCmd.label + ': ' + r.detail);
+                            setBusy(cockpitPendingCmd.btn, false);
+                            cockpitPendingCmd = null;
+                        } else {
+                            actLog(r.ok ? 'ok' : 'err', (r.ok ? '✓ ' : '✗ ') + r.detail);
+                        }
+                    }
+                } catch (e) { /* result endpoint optional */ }
+            } catch (e) {
+                liveState.bridge = false;
+                dot.style.background = '#ff6b6b';
+                st.textContent = 'bridge offline — run godmode\\bridge.py (the bot may still be trading; this page just cannot see it)';
+                st.style.color = '#ff6b6b';
+                warn.style.display = 'none';
+                document.getElementById('liveChips').innerHTML =
+                    chip('BRIDGE OFFLINE', 'bad') + chip('PAGE CANNOT SEE THE BOT', 'warn');
+                const whyEl = document.getElementById('cockpitWhy');
+                if (whyEl) whyEl.textContent = 'every button below is dead until bridge.py runs';
+                ['btnBuy', 'btnSell', 'btnCloseAll', 'btnPushStrategy', 'btnStartBot'].forEach(id => {
+                    const b = document.getElementById(id);
+                    if (b) { b.dataset.blocked = '1'; if (!b.classList.contains('busy')) b.disabled = true; b.title = 'bridge offline'; }
+                });
+                if (cs) { cs.textContent = '○ bridge offline — cannot tell if the bot is alive'; cs.style.color = '#ff6b6b'; }
+            }
+        }
+        setInterval(cockpitPoll, 5000);
+        cockpitPoll();
+
+        // ---------- BOT CONSOLE (streaming thoughts + Start button) ----------
+        let consoleCache = '';
+
+        async function startBot() {
+            const btn = document.getElementById('btnStartBot');
+            const note = document.getElementById('startNote');
+            setBusy('btnStartBot', true);
+            note.textContent = '';
+            actLog('warn', 'Start pressed — this DELETES profit_guard.json, so the $100 target re-arms from current equity. Waiting for the bot to come up...');
+            try {
+                const res = await bridgeFetch('/api/start', {method: 'POST'});
+                const removed = (res && res.removed && res.removed.length) ? res.removed.join(', ') : 'nothing';
+                actLog('info', 'bridge cleared: ' + removed);
+                const t0 = Date.now();
+                let lastState = '';
+                const timer = setInterval(async () => {
+                    const secs = Math.round((Date.now() - t0) / 1000);
+                    note.textContent = 'starting... ' + secs + 's (watchdog takes ~35s)';
+                    try {
+                        const s = await bridgeFetch('/api/status');
+                        const age = Math.max(0, Math.round((Date.now() - new Date(s.timestamp).getTime()) / 1000));
+                        const alive = age < 30;
+                        const state = alive ? 'up' : 'down';
+                        if (state !== lastState) {
+                            lastState = state;
+                            if (alive) {
+                                clearInterval(timer);
+                                setBusy('btnStartBot', false);
+                                const cfg = s.config || {};
+                                note.textContent = '';
+                                cockpitMsg('✓ BOT IS LIVE — heartbeat ' + age + 's ago · ' + (s.mode || '?').toUpperCase()
+                                    + ' · trading ' + fmtTF(cfg.timeframe)
+                                    + ' · EMA ' + cfg.ema_fast + '/' + cfg.ema_slow
+                                    + ' · equity $' + ((s.cooldown && s.cooldown.broker_equity) || 0).toFixed(2));
+                            }
+                        }
+                        if (secs > 75 && lastState !== 'up') {
+                            clearInterval(timer);
+                            setBusy('btnStartBot', false);
+                            note.textContent = '';
+                            cockpitMsg('✗ bot did NOT come up within 75s. Check MT5 is open + Algo Trading ON, then look at godmode\\bot_live_err.log', true);
+                        }
+                    } catch (e) { /* keep polling */ }
+                }, 2500);
+            } catch (e) {
+                setBusy('btnStartBot', false);
+                cockpitMsg('✗ start failed: ' + e.message + ' — is godmode\\bridge.py running?', true);
+            }
+        }
+
+let termFilter = 'all', termBuf = [];
+
+        function classifyLog(l) {
+            if (/Traceback|UnboundLocal|NameError|exception|kill switch|rejected|failed/i.test(l)) return 'err';
+            if (/\[bank\]/.test(l)) return 'vault';
+            if (/OPEN (LONG|SHORT)|WICK-STOP|-> ok|-> filled|-> SL|close_all/i.test(l)) return 'trade';
+            if (/\[gate\]/.test(l)) return 'gate';
+            if (/\[think\]/.test(l)) return 'think';
+            if (/\[ctx\]|\[be\]|\[pending\]|\[config\]|\[cmd\]|\[SAFE\]|learner|relearn|FILTERED/.test(l)) return 'sys';
+            if (/radar=/.test(l)) return 'radar';
+            return 'raw';
+        }
+        const TERM_COLOR = {err: '#ff6b6b', vault: '#00ff88', trade: '#00ff88', gate: '#ff9f43',
+            think: '#7ec8ff', sys: '#c58fff', radar: '#566176', raw: '#5b6478'};
+
+        function termLine(e) {
+            const ts = /^\[\d{2}:\d{2}:\d{2}\]/.test(e.l.trim())
+                ? '' : '<span style="color:#3d4557;">[' + new Date(e.seen).toLocaleTimeString('en-GB') + '] </span>';
+            const dim = e.cls === 'think' && /waiting for the cross/.test(e.l) ? 'opacity:.72;' : '';
+            const b = e.cls === 'vault' || e.cls === 'trade' ? 'font-weight:700;' : '';
+            return '<div style="color:' + TERM_COLOR[e.cls] + ';' + dim + b + '">'
+                + ts + e.l.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>';
+        }
+
+        function botState(lines) {
+            for (let i = lines.length - 1; i >= 0; i--) {
+                const l = lines[i];
+                if (/Traceback|Unbound|NameError|exception/.test(l)) return ['ERROR - CRASH', 'bad'];
+                if (/\[SAFE\]/.test(l)) return ['STAND-DOWN (wrong account?)', 'warn'];
+                if (/\[bank\]/.test(l)) return ['BANKED +$100', 'ok'];
+                if (/OPEN (LONG|SHORT)/.test(l)) return ['EXECUTING', 'ok'];
+                if (/\[think\].*holding/.test(l)) return ['MANAGING POSITION', 'ok'];
+                if (/\[gate\]/.test(l)) return ['GATING WEAK SETUPS', 'warn'];
+                if (/\[think\].*waiting for the cross/.test(l)) return ['WAITING FOR CROSS', 'warn'];
+                if (/\[think\].*cooldown/.test(l)) return ['COOLDOWN', 'warn'];
+                if (/\[think\].*signal HELD/.test(l)) return ['RETRYING FILL', 'warn'];
+                if (/radar=RED|FLATTEN/.test(l)) return ['RADAR RED', 'bad'];
+                if (/connected:/.test(l)) return ['BOOTED', 'ok'];
+            }
+            return ['STARTING', 'idle'];
+        }
+
+        function renderTerm() {
+            const el = document.getElementById('botConsole');
+            if (!el) return;
+            const stick = el.scrollTop + el.clientHeight >= el.scrollHeight - 60;
+            const rows = termBuf.filter(e => termFilter === 'all' || e.cls === termFilter);
+            el.innerHTML = rows.slice(-220).map(termLine).join('');
+            if (stick) el.scrollTop = el.scrollHeight;
+        }
+
+        function setTermFilter(f) {
+            termFilter = f;
+            document.querySelectorAll('#termFilters .chip').forEach(ch => {
+                ch.className = 'chip ' + (ch.dataset.f === f ? 'ok' : 'idle');
+            });
+            renderTerm();
+        }
+
+        async function pollConsole() {
+            const stEl = document.getElementById('consoleState');
+            try {
+                const r = await bridgeFetch('/api/log');
+                const lines = r.lines || [];
+                if (!lines.length) {
+                    stEl.textContent = 'no log yet - press Start Bot (needs MT5 open)';
+                    stEl.style.color = '#ffd166';
+                    return;
+                }
+                const last = lines[lines.length - 1];
+                const idx = consoleCache ? lines.indexOf(consoleCache) : -1;
+                const fresh = consoleCache === ''
+                    ? lines.slice(-140)
+                    : (idx >= 0 ? lines.slice(idx + 1) : lines.slice(-140));
+                consoleCache = last;
+                if (fresh.length) {
+                    if (termBuf.length + fresh.length > 600) termBuf = termBuf.slice(-420);
+                    fresh.forEach(l => termBuf.push({l: l, cls: classifyLog(l), seen: Date.now()}));
+                    renderTerm();
+                }
+                const st = botState(lines);
+                const badge = document.getElementById('botStateBadge');
+                badge.className = 'chip ' + st[1];
+                badge.textContent = 'STATE: ' + st[0];
+                const nowEl = document.getElementById('botNow');
+                const th = termBuf.filter(e => e.cls === 'think').slice(-1)[0];
+                if (nowEl && th) {
+                    const age = Math.round((Date.now() - th.seen) / 1000);
+                    nowEl.innerHTML = '<span style="color:#667;">NOW:</span> '
+                        + th.l.replace(/^\s*\[think\]\s*/, '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                        + (th.l.includes('radar=') ? '' :
+                            ' <span style="color:#566176;">· cycle ' + age + 's ago</span>');
+                }
+                stEl.textContent = 'streaming live (' + termBuf.length + ' lines)';
+                stEl.style.color = '#8bd17c';
+            } catch (e) {
+                stEl.textContent = 'bridge offline - it auto-starts at Windows logon';
+                stEl.style.color = '#ff6b6b';
+            }
+        }
+        setInterval(pollConsole, 3000);
+        pollConsole();
+
+        window.addEventListener('resize', () => { chartCanvas = null; drawChart(); });
+        regenerate();
+        updateDBDisplay();
+    </script>
+</body>
+</html>
