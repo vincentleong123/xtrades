@@ -1275,6 +1275,7 @@ function sendCmd(action) {
         .catch(e => {
             actLog('err', verb + ' failed to send: ' + e.message);
             setBusy(btn, false);
+            if (cockpitPendingCmd && cockpitPendingCmd.id === id) cockpitPendingCmd = null;
         });
 }
 
@@ -1429,8 +1430,8 @@ async function stopBot() {
     try {
         const res = await bridgeFetch('/api/stop', {method: 'POST'});
         if (res && res.ok) {
-            note.textContent = 'STOPPED - bot and bridge are halting (page goes dark; that is expected). Press START BOT to resume.';
-            actLog('ok', 'STOP confirmed - kill-switch flag created. Nothing will open or manage trades until START BOT.');
+            note.textContent = 'STOPPED - the bot halts in ~40s. Bridge stays up so you still see status here; press START BOT to resume.';
+            actLog('ok', 'STOP confirmed - kill-switch flag created; watchdog stops the trader within ~40s. No new entries will fire.');
         } else {
             actLog('err', 'stop failed: unexpected response');
             setBusy('btnStopBot', false);

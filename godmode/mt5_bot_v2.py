@@ -441,14 +441,20 @@ def write_god_data(cfg, engine, radar_reading, feed, mode: str, extra: dict = No
         "cooldown": extra or {},
     }
     tmp = DATA_PATH + ".tmp"
-    try:
-        with open(tmp, "w") as f:
-            json.dump(payload, f, indent=2)
-        os.replace(tmp, DATA_PATH)
-    except (PermissionError, OSError):
-        # transient Windows file lock (AV / dashboard read / racing process):
-        # never crash the trading loop over a status-file write
-        print("[warn] god_data.json write skipped (file locked)")
+    last_err = None
+    for _ in range(5):
+        try:
+            with open(tmp, "w") as f:
+                json.dump(payload, f, indent=2)
+            os.replace(tmp, DATA_PATH)
+            return
+        except (PermissionError, OSError) as e:
+            # transient Windows file lock (AV / dashboard read / racing process):
+            # never crash the trading loop over a status-file write, but retry
+            # briefly because the bridge opens god_data.json on every poll
+            last_err = e
+            time.sleep(0.05)
+    print(f"[warn] god_data.json write skipped (file locked: {last_err})")
 
 
 def run_paper(cfg):

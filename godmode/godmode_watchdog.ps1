@@ -5,8 +5,9 @@
 # - restarts if a process died or the bot's log went silent (hang) while terminal is up
 # - bridge health = real HTTP probe on 127.0.0.1:8765
 # - restart-storm backoff: >=5 starts in 10 min -> wait 10 min
-# - kill switch: create file watchdog-disable.flag  -> stops bot+bridge, watchdog idles
-#   (delete the flag to resume; watchdog resumes automatically)
+# - kill switch: create file watchdog-disable.flag  -> stops bot ONLY, bridge stays
+#   alive so the dashboard can still show status and press START BOT to resume
+#   (delete the flag = resume; watchdog restarts the trader within one loop)
 # Launch: start-godmode.vbs in shell:startup (runs hidden at logon)
 
 $ErrorActionPreference = 'SilentlyContinue'
@@ -32,8 +33,11 @@ function Find-Proc([string]$needle) {
 }
 
 function Test-Bridge {
+    # probe /api/ping: always 200 while the bridge process is alive. Do NOT
+    # probe /api/status: it can briefly 503 while the trader rewrites
+    # god_data.json, which must not be treated as a dead bridge.
     try {
-        $r = Invoke-WebRequest -Uri 'http://127.0.0.1:8765/api/status' -UseBasicParsing -TimeoutSec 4
+        $r = Invoke-WebRequest -Uri 'http://127.0.0.1:8765/api/ping' -UseBasicParsing -TimeoutSec 4
         return ($r.StatusCode -eq 200)
     } catch { return $false }
 }
@@ -47,12 +51,11 @@ Start-Sleep -Seconds 45   # boot grace: logon scripts / MT5 terminal first
 while ($true) {
     Start-Sleep -Seconds 30
 
-    # ---- kill switch ----
+    # ---- kill switch: halt the TRADER only; the bridge stays up so the
+    # ---- dashboard can still read status / show the bot as DEAD / ring START.
     if (Test-Path -LiteralPath $disable) {
         $b = Find-Proc '*mt5_bot_v2.py*'
-        if ($b) { $b | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }; Log 'FLAG: trader stopped' }
-        $r = Find-Proc '*bridge.py*'
-        if ($r) { $r | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }; Log 'FLAG: bridge stopped' }
+        if ($b) { $b | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }; Log 'FLAG: trader stopped (bridge stays alive)' }
         continue
     }
 
