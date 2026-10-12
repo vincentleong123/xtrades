@@ -29,7 +29,7 @@
     "breakout_n": 15,
     "atr_expansion": false,
     "atr_expansion_period": 50,
-    "breakeven_r": 1.0
+    "breakeven_r": 1
   },
   "radar": {
     "stand_down_score": 70,
@@ -37,7 +37,7 @@
   },
   "exit_engine": {
     "on": true,
-    "min_peak": 2.0,
+    "min_peak": 2,
     "lock_atr_off": 999,
     "retrace_pct": 70,
     "ha_flip": true,
