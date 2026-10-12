@@ -1273,10 +1273,27 @@ function simulateTrades(candles, p) {
             const ttlGone = (pd.createdIdx != null && i - pd.createdIdx > 5) || (pd.createdIdx == null && (c.t - pd.createdT) > 300);
             if (ttlGone) { pendings.splice(k, 1); cancelled++; continue; }
             if (pd.availIdx != null && i < pd.availIdx) continue;   // vantage delay: not yet live
+            if (pd.chase) {
+                // live repeg, bar-granular: the reserve follows touch until
+                // kissed; beyond 0.5x stop adverse it stands down like live.
+                if (pd.direction === 'LONG') pd.level = Math.min(pd.level, c.c - 0.05);
+                else pd.level = Math.max(pd.level, c.c + 0.05);
+                const org = (pd.orig != null ? pd.orig : pd.level);
+                const adv = pd.direction === 'LONG' ? pd.level - org : org - pd.level;
+                if (pd.sd > 0 && adv > 0.5 * pd.sd) { pendings.splice(k, 1); cancelled++; continue; }
+            }
             const hit = pd.direction === 'LONG' ? c.l <= pd.level : c.h >= pd.level;
             if (!hit) continue;
             pendings.splice(k, 1);
             num++;
+            if (pd.chase && pd.sd > 0) {
+                // the level walked: re-price entry + stops from the fill bar
+                const fPx = pd.level + (pd.direction === 'LONG' ? spreadPx : -spreadPx);
+                pd.pos.entryPrice = fPx;
+                pd.pos.sl = pd.direction === 'LONG' ? fPx - pd.sd : fPx + pd.sd;
+                pd.pos.hard = pd.direction === 'LONG' ? fPx - pd.sd * (p.disasterMult || 1) : fPx + pd.sd * (p.disasterMult || 1);
+                pd.pos.tp = pd.direction === 'LONG' ? fPx + pd.sd * p.rrRatio : fPx - pd.sd * p.rrRatio;
+            }
             opens.push(Object.assign(pd.pos, { num: num, candleIdx: i, entryTime: c.t, entryBalance: balance, cycle: cycleNo, spreadPaid: pd.pos.lots * 100 * spreadPx }));
         }
 
@@ -1371,7 +1388,8 @@ function simulateTrades(candles, p) {
                 // instant fills here either - layer 0 waits for the touch
                 // like every layer; untouched = TTL-cancelled. Matches the
                 // live fill-or-expire distribution without modeling the loop.
-                pendings.push({ sigId: sigId, direction: dir, level: level, createdT: c.t, pos: pos });
+                // chase:true lets the fill loop walk it to touch like live.
+                pendings.push({ sigId: sigId, direction: dir, level: level, createdT: c.t, createdIdx: i, chase: (k === 0), orig: level, sd: slDist, pos: pos });
             }
             // VANTAGE RELOAD (live: delayed 4th bullet near the stop shelf).
             // The reserve is STAGED here but enters the book only once its
