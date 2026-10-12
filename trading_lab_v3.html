@@ -347,6 +347,21 @@
                     <button class="btn btn-secondary" id="btnLotStd" onclick="setLotPreset('std')" title="Standard size: 0.45 floor, cap off (the 84% era)">LOT 0.45</button>
                     <button class="btn btn-secondary" id="btnLotWhale" onclick="setLotPreset('whale')" title="Whale size: 1.0 floor, cap off. NEVER push to live">LOT 1.0</button>
                     <span class="mono-line" id="abcReadout" style="flex:1 1 100%;color:#ffd700;"></span>
+                    <details id="refTables" style="flex:1 1 100%;margin-top:6px;font-size:11px;color:#8b93a7;">
+                        <summary style="cursor:pointer;color:#ffd700;">MEASURED REFERENCE (pinned 2026-10-12, 2min full span, $511 start)</summary>
+                        <div style="margin-top:4px;line-height:1.7;">
+                        <b style="color:#ffffff;">SIZE moves measured WR (same strategy, only sizing differs):</b><br>
+                        HONEST 0.05+$20cap: $622 · 208 trades · WR63% · DD32.8% &nbsp;|&nbsp; STD 0.45 no cap: $7,214 · 230 · WR83% · DD26.0% &nbsp;|&nbsp; WHALE 1.0 no cap: $15,068 · 230 · WR83% · DD40.1% (−$6k swings)<br>
+                        <i>Mechanism, not edge: big sizes trip GIVE-$ on noise (micro-banked wins) + halt-path selection. WR plateaus at 83% — the last mile to 90% was instant-fill phantom, never size.</i><br><br>
+                        <b style="color:#ffffff;">A/B/C cores (same data + rails):</b><br>
+                        A-live ATR3.5/1slot: $12,931 · 239 · WR90% · DD6.5% &nbsp;|&nbsp; B-champ ATR1.25/2slots: $12,225 · 384 · WR84% · DD12.6% &nbsp;|&nbsp; C-classic ATR1/3slots: $20,262 · 406 · WR83% · DD10.5% (tails −$463)<br>
+                        <i>Caution: measured in the instant-fill era (layer 0 granted favorable fills) — absolute $ inflated; relative order still informative. Live chase reality differs; honest-fill reruns read lower.</i><br><br>
+                        <b style="color:#ffffff;">Deep sweep (EMA 5/27 fixed, ~250 runs, train Sep29–Oct5 / validate Oct6–9):</b><br>
+                        Train champ RR6/ATR1.25/risk7/floor0.45/pk3/keep20: $13,951 · 237 · DD31.6% &nbsp;|&nbsp; same core on validate: $1,549 · DD35.4% (over the 35 line) &nbsp;|&nbsp; risk3 confirm: train $6,725 DD29.4 / validate $1,559 DD35.4<br>
+                        <i>Risk 7% smells of curve-fit (27x in 5 days); risk 3% keeps the shape at half the heat. Nothing survived validate under DD35 — Oct6–9 chop kills static configs; that itself is the finding.</i><br><br>
+                        <b style="color:#ffffff;">Legend:</b> HONEST = risk-driven sizing, $20 cap, touch-only fills (live-comparable) · MONSTER = forced floors, no cap (numbers impress, broker would stop-out) · PHANTOM = fills no real broker grants (instant better-than-market).
+                        </div>
+                    </details>
                     <button class="btn btn-success" onclick="heartbeatDemo()" title="Sine-wave heartbeat preset: XAUUSD 1M, sine-only, accel-flip exits, Oct 7 wave day">HEARTBEAT DEMO</button>
                     <span class="mono-line" id="liveStrategy" style="flex:1 1 100%;">
                         <span style="color:#ffffff;">RUNNING:</span> reading bot...
