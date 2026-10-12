@@ -324,6 +324,9 @@
                     <div class="input-group"><label>Floor $ (live)</label><input type="number" id="equityFloor" value="400" step="50" min="0" title="Live equity fuse: close all + halt at/below this equity. Push to apply"></div>
                     <div class="input-group"><label>Breakout N (live)</label><input type="number" id="breakoutN" value="15" step="1" min="0" max="100" title="Live entry gate: require close beyond N-bar extreme, 0 = off. Push to apply"></div>
                     <div class="input-group"><label>Breakeven R (live)</label><input type="number" id="breakevenR" value="1" step="0.5" min="0" max="5" title="Live: park stop at entry after +N R, 0 = off. Push to apply"></div>
+                    <div class="chkrow"><input type="checkbox" id="nochaseOn" checked><label for="nochaseOn">No-chase gate (Set A)</label><span style="font-size:11px;color:#8b93a7;">skip vertical exhaust, Set B senses instead</span></div>
+                    <div class="input-group"><label>Chase pre-move x</label><input type="number" id="nochaseAtr" value="2.5" step="0.5" min="1" max="6" title="Skip when prior move exceeds this x ATR with acceleration"></div>
+                    <div class="chkrow"><input type="checkbox" id="setbOn" checked><label for="setbOn">Set B piggyback (0.01+0.03)</label><span style="font-size:11px;color:#8b93a7;">scout with move + fade it, own magic, pocket money</span></div>
                     <div class="input-group"><label>Profit Target $</label><input type="number" id="profitTarget" value="100" step="100" min="0"></div>
                     <div class="input-group"><label>Spread (pts)</label><input type="number" id="spreadPts" value="34" step="1" min="0" max="500" title="Live HFM XAUUSD spread in points (0.01 each) - charged on every fill"></div>
                     <div class="input-group"><label>Goal $ (bank it)</label><input type="number" id="goalBalance" value="" step="100" min="500" title="Optional: bank profits here and restart the $500 journey. Empty = compound freely (spread, margin and 100-lot broker caps still apply)"></div>
@@ -490,7 +493,7 @@ const TF_LABELS = { '1min':'1M', '2min':'2M', '3min':'3M', '5min':'5M', '15min':
 // ---- FIXED DEFAULTS: every refresh starts here (the measured-best settings) ----
 const DEFAULTS = { tf: '1min', emaFast: 5, emaSlow: 27, atrStop: 1, rrRatio: 5,
     riskPct: 5, maxConcurrent: 3, baseLots: 0.45, wickProof: true, disasterMult: 1.5, profitTarget: 100,
-    spreadPts: 34, exitEngine: true, givePeak: 2, giveKeepPct: 30, squeezeOn: false, squeezePct: 70, goalBalance: '', floorBalance: 400, crossOn: true, alignOn: false, fadeOn: false, reloadOn: false, fadeSpike: 2, fadeN: 20, vwapOn: false, vwapKEntry: 2, vwapKStop: 3, lw1: 50, lw2: 30, lw3: 20, sineOn: false, fibOn: false, fibN: 50, beatOn: false, tightTP: false, maxHold: 0, roundOn: false, fomoOn: false, fomoN: 4, vanOn: false, vanDelay: 120, vanAtr: 0.8, vanFrac: 0.3, vanScratch: 0.6, equityFloor: 400, autoTune: true, breakoutN: 15, breakevenR: 1, ladderOffsets: '0,0.8,1' };
+    spreadPts: 34, exitEngine: true, givePeak: 2, giveKeepPct: 30, squeezeOn: false, squeezePct: 70, goalBalance: '', floorBalance: 400, crossOn: true, alignOn: false, fadeOn: false, reloadOn: false, fadeSpike: 2, fadeN: 20, vwapOn: false, vwapKEntry: 2, vwapKStop: 3, lw1: 50, lw2: 30, lw3: 20, sineOn: false, fibOn: false, fibN: 50, beatOn: false, tightTP: false, maxHold: 0, roundOn: false, fomoOn: false, fomoN: 4, vanOn: false, vanDelay: 120, vanAtr: 0.8, vanFrac: 0.3, vanScratch: 0.6, equityFloor: 400, autoTune: true, breakoutN: 15, breakevenR: 1, ladderOffsets: '0,0.8,1', nochaseOn: true, nochaseAtr: 2.5, setbOn: true };
 
 let currentSpeedProfile = DEFAULTS.tf;
 let allTrades = [];
@@ -983,7 +986,7 @@ function simulateTrades(candles, p) {
     // a SIGNAL counts as active while any of its layers is open or pending
     const activeSigs = () => {
         const s = new Set();
-        for (const o of opens) s.add(o.sigId);
+        for (const o of opens) { if ((o.kind || '').slice(0, 4) !== 'setb') s.add(o.sigId); }
         for (const pd of pendings) s.add(pd.sigId);
         return s.size;
     };
@@ -1140,6 +1143,7 @@ function simulateTrades(candles, p) {
 
         for (let k = opens.length - 1; k >= 0; k--) {
             const t = opens[k];
+            const isSetB = (t.kind || '').slice(0, 4) === 'setb';   // sensors ride broker SL/TP only
             // unrealized NOW vs peak from bar EXTREMES (live samples intra-bar)
             const flNow = (t.direction === 'LONG' ? c.c - t.entryPrice : t.entryPrice - c.c) * t.lots * 100;
             const flHi = (t.direction === 'LONG' ? c.h - t.entryPrice : t.entryPrice - c.l) * t.lots * 100;
@@ -1169,7 +1173,7 @@ function simulateTrades(candles, p) {
             // UNDERWATER TIME-STOP (anti-bleed): a position still red after
             // maxHoldBars closes flat at market instead of waiting to gap
             // into the disaster stop. Targets the #1 autopsy killer.
-            if (p.maxHold > 0 && (i - t.candleIdx) >= p.maxHold && flNow < 0) {
+            if (p.maxHold > 0 && !isSetB && (i - t.candleIdx) >= p.maxHold && flNow < 0) {
                 exitPx = c.c; reason = 'TIME';
             }
             // HEARTBEAT accel-flip (sine rides only): a powerful 5-bar shove
@@ -1190,7 +1194,7 @@ function simulateTrades(candles, p) {
             // (mirrors the live exit-engine chop-out; live config has it
             // ON - only runs when the Exit-Engine box is checked)
             if (exitPx !== null) { /* ACCEL-FLIP holds - close now */ }
-            else if (p.exitEngine && t.pk >= givePeak && flNow <= giveKeep * t.pk) {
+            else if (p.exitEngine && !isSetB && t.pk >= givePeak && flNow <= giveKeep * t.pk) {
                 const thrPx = t.direction === 'LONG'
                     ? t.entryPrice + (giveKeep * t.pk) / (t.lots * 100)
                     : t.entryPrice - (giveKeep * t.pk) / (t.lots * 100);
@@ -1199,7 +1203,7 @@ function simulateTrades(candles, p) {
             }
             else if (hardHit) { exitPx = t.hard; reason = 'SL-hard'; }
             else if (tpHit) { exitPx = t.tp; reason = 'TP'; }
-            else if ((t.direction === 'LONG' && exDn) || (t.direction === 'SHORT' && exUp)) {
+            else if (!isSetB && ((t.direction === 'LONG' && exDn) || (t.direction === 'SHORT' && exUp))) {
                 exitPx = c.c; reason = 'Reverse';
             } else if (p.wickProof && closeBeyond) { exitPx = c.c; reason = 'SL'; }
             else if (!p.wickProof && touchSl) { exitPx = t.sl; reason = 'SL'; }
@@ -1278,7 +1282,8 @@ function simulateTrades(candles, p) {
             if (advPx >= (p.vanScratch || 0.6) * vs.slDist) {
                 vs.scratched = true;
                 for (let k = opens.length - 1; k >= 0; k--) {
-                    const t = opens[k];
+            const t = opens[k];
+            const isSetB = (t.kind || '').slice(0, 4) === 'setb';   // sensors ride broker SL/TP only
                     if (t.direction !== vs.dir || t.status !== 'open') continue;
                     const sx = t.direction === 'LONG' ? c.c - spreadPx : c.c + spreadPx;
                     closeTrade(t, sx, 'V-SCRATCH', i);
@@ -1306,7 +1311,19 @@ function simulateTrades(candles, p) {
             gatePass = i >= pauseUntil && regimeOk(i) && !coiled;
             if (!gatePass) gateBlocked++;
         }
-        if (p.crossOn && gatePass && activeSigs() < p.maxConcurrent && balance > 0 && balance < p.targetBalance && balance >= p.floorBal && atr[i]) {
+        // NO-CHASE GATE (live: Set A stands down on verticals). Extended +
+        // accelerating into the signal direction = the move is done; Set B
+        // senses it instead (block below).
+        let chaseSkip = false, chasePre = 0, chaseAcc = 0;
+        if (p.nochaseOn && dir && atr[i] && i >= 10) {
+            const m = dir === 'LONG' ? 1 : -1;
+            const c0 = c.c, c5 = closes[i - 5], c10 = closes[i - 10];
+            chasePre = m * (c0 - c10) / atr[i];
+            chaseAcc = m * (((c0 - c5) / 5) - ((c5 - c10) / 5)) / atr[i];
+            chaseSkip = chasePre > (p.nochaseAtr == null ? 2.5 : p.nochaseAtr) && chaseAcc > 0;
+            if (chaseSkip) gateBlocked++;
+        }
+        if (p.crossOn && gatePass && !chaseSkip && activeSigs() < p.maxConcurrent && balance > 0 && balance < p.targetBalance && balance >= p.floorBal && atr[i]) {
             const entry = c.c;
             const slDist = atr[i] * p.atrStop;
             const riskAmt = balance * (p.riskPct / 100);
@@ -1355,6 +1372,31 @@ function simulateTrades(candles, p) {
                 const vSig = ++numSig;
                 vanSig[sigId] = { dir: dir, ref: entry, slDist: slDist, bornIdx: i, scratched: false };
                 vanWait[sigId] = { dir: dir, entry: entry, slDist: slDist, lots: totalLots, risk: riskAmt, availIdx: i + vBars, vSigId: vSig };
+            }
+        }
+
+        // SET B PIGGYBACK ECU (live: 0.01 scout + 0.03 fade on chase-skips).
+        // Own kinds (excluded from Set A slots), broker SL/TP only - the
+        // exit loop leaves setb kinds to hard/TP/SL exactly like live.
+        // Sensors wait when Set A holds a book, one pair at a time.
+        if (chaseSkip && dir && p.setbOn && atr[i] && !opens.some(o => (o.kind || '').slice(0, 4) === 'setb') && !opens.some(o => (o.kind || '').slice(0, 4) !== 'setb')) {
+            const bSl = atr[i] * p.atrStop;
+            const pairs = [
+                { tag: 'setb-scout', d: dir, lots: 0.01, tpR: 1 },
+                { tag: 'setb-fade', d: dir === 'LONG' ? 'SHORT' : 'LONG', lots: 0.03, tpR: 4 }
+            ];
+            for (const pr of pairs) {
+                const bFill = pr.d === 'LONG' ? c.c + spreadPx : c.c - spreadPx;
+                num++;
+                opens.push(Object.assign({
+                    sigId: ++numSig, direction: pr.d, entryPrice: bFill, kind: pr.tag,
+                    exitPrice: null, exitBalance: null, lots: pr.lots,
+                    pnl: 0, pnlPct: 0, status: 'open', isWin: false,
+                    sl: pr.d === 'LONG' ? bFill - bSl : bFill + bSl,
+                    hard: pr.d === 'LONG' ? bFill - bSl * (p.disasterMult || 1) : bFill + bSl * (p.disasterMult || 1),
+                    tp: pr.d === 'LONG' ? bFill + bSl * pr.tpR : bFill - bSl * pr.tpR,
+                    riskAmount: 0, pk: 0, reason: '', gyroPre: +chasePre.toFixed(2), gyroAcc: +chaseAcc.toFixed(2)
+                }, { num: num, candleIdx: i, entryTime: c.t, entryBalance: balance, cycle: cycleNo, spreadPaid: pr.lots * 100 * spreadPx }));
             }
         }
 
@@ -1698,6 +1740,9 @@ function readSimParams() {
         lw2: Math.min(100, Math.max(0, parseFloat(gv('lw2', '30')) || 30)),
         lw3: Math.min(100, Math.max(0, parseFloat(gv('lw3', '20')) || 20)),
         ladderOffsets: gv('ladderOffsets', '0,0.8,1'),
+        nochaseOn: gc('nochaseOn'),
+        nochaseAtr: Math.min(6, Math.max(1, parseFloat(gv('nochaseAtr', '2.5')) || 2.5)),
+        setbOn: gc('setbOn'),
         vanOn: gc('vanOn'),
         vanDelay: Math.max(0, parseFloat(gv('vanDelay', '120')) || 0),
         vanAtr: Math.min(1.4, Math.max(0.2, parseFloat(gv('vanAtr', '0.8')) || 0.8)),
@@ -2508,7 +2553,7 @@ function resetBest() {
     document.getElementById('vwapKStop').value = DEFAULTS.vwapKStop;
     document.getElementById('lw1').value = DEFAULTS.lw1;
     document.getElementById('lw2').value = DEFAULTS.lw2;
-    document.getElementById('lw3').value = DEFAULTS.lw3;     document.getElementById('vanOn').checked = DEFAULTS.vanOn;     document.getElementById('vanDelay').value = DEFAULTS.vanDelay;     document.getElementById('vanAtr').value = DEFAULTS.vanAtr;     document.getElementById('vanFrac').value = DEFAULTS.vanFrac;     document.getElementById('vanScratch').value = DEFAULTS.vanScratch;     document.getElementById('autoTune').checked = DEFAULTS.autoTune;     document.getElementById('equityFloor').value = DEFAULTS.equityFloor;     document.getElementById('breakoutN').value = DEFAULTS.breakoutN;     document.getElementById('breakevenR').value = DEFAULTS.breakevenR;     document.getElementById('ladderOffsets').value = DEFAULTS.ladderOffsets;
+    document.getElementById('lw3').value = DEFAULTS.lw3;     document.getElementById('vanOn').checked = DEFAULTS.vanOn;     document.getElementById('vanDelay').value = DEFAULTS.vanDelay;     document.getElementById('vanAtr').value = DEFAULTS.vanAtr;     document.getElementById('vanFrac').value = DEFAULTS.vanFrac;     document.getElementById('vanScratch').value = DEFAULTS.vanScratch;     document.getElementById('autoTune').checked = DEFAULTS.autoTune;     document.getElementById('equityFloor').value = DEFAULTS.equityFloor;     document.getElementById('breakoutN').value = DEFAULTS.breakoutN;     document.getElementById('breakevenR').value = DEFAULTS.breakevenR;     document.getElementById('ladderOffsets').value = DEFAULTS.ladderOffsets;     document.getElementById('nochaseOn').checked = DEFAULTS.nochaseOn;     document.getElementById('nochaseAtr').value = DEFAULTS.nochaseAtr;     document.getElementById('setbOn').checked = DEFAULTS.setbOn;
     document.getElementById('crossOn').checked = DEFAULTS.crossOn;
     document.getElementById('alignOn').checked = DEFAULTS.alignOn;
     document.getElementById('goalBalance').value = DEFAULTS.goalBalance;
@@ -3098,7 +3143,9 @@ function collectStrategy() {
         auto_tune: document.getElementById('autoTune').checked,
         exit_engine: { on: document.getElementById('exitEngine').checked },
         gates: { breakout_n: +document.getElementById('breakoutN').value || 0, breakeven_r: +document.getElementById('breakevenR').value || 0 },
-        limit_ladder: { weights: [+document.getElementById('lw1').value || 50, +document.getElementById('lw2').value || 30, +document.getElementById('lw3').value || 20], offsets: String(document.getElementById('ladderOffsets').value || '0,0.8,1').split(',').map(Number).filter(isFinite) }
+        limit_ladder: { weights: [+document.getElementById('lw1').value || 50, +document.getElementById('lw2').value || 30, +document.getElementById('lw3').value || 20], offsets: String(document.getElementById('ladderOffsets').value || '0,0.8,1').split(',').map(Number).filter(isFinite) },
+        nochase: { on: document.getElementById('nochaseOn').checked, pre_atr: +document.getElementById('nochaseAtr').value || 2.5 },
+        setb: { on: document.getElementById('setbOn').checked, scout_lots: 0.01, fade_lots: 0.03, sl_r: 1.0, scout_tp_r: 1.0, fade_tp_r: 4.0 }
     };
 }
 

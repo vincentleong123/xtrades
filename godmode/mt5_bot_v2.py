@@ -58,6 +58,9 @@ DEFAULT_CONFIG = {
     "disaster_stop_mult": 1.5,
     "profit_target_usd": 0,
     "equity_floor_usd": 0,    # 0 = off; downhill twin of the profit guard
+    "nochase": {"on": True, "pre_atr": 2.5},   # Set A never buys exhaust
+    "setb": {"on": True, "scout_lots": 0.01, "fade_lots": 0.03,
+             "sl_r": 1.0, "scout_tp_r": 1.0, "fade_tp_r": 4.0},
     "entry_mode": "cross",
     "mission_hours": 0,
     "time_stop_s": 216,
@@ -1986,6 +1989,7 @@ def run_live(cfg):
         fill_mode = mt5.ORDER_FILLING_RETURN
     print(f"filling mode: {fill_mode} (symbol filling_mode bits {sym.filling_mode})")
     magic = 987001
+    SETB_MAGIC = 987002   # Set B piggyback ECU sensor pair (never managed, never counted)
     engine = Engine(acc.balance)
     engine.learner = SLLearner()
     print(f"learner db: {len(engine.learner.trades)} past trades, "
@@ -3153,6 +3157,113 @@ def run_live(cfg):
                 if sig:
                     atr = float(rolling_atr(df_h1).iloc[-1])
                     stop_dist = cfg["atr_stop_mult"] * atr
+                    # NO-CHASE GATE (user 2026-10-12): Set A never buys a
+                    # vertical's exhaust. Extended + accelerating into the
+                    # signal direction = the move is done, stand down.
+                    _nc = cfg.get("nochase") or {}
+                    _chased = False
+                    _nc_pre = 0.0
+                    _nc_acc = 0.0
+                    if _nc.get("on") and sig and atr and atr > 0:
+                        try:
+                            _cl = df_h1["close"]
+                            if len(_cl) >= 12:
+                                _m = 1.0 if sig == "LONG" else -1.0
+                                _c0 = float(_cl.iloc[-1])
+                                _c5 = float(_cl.iloc[-6])
+                                _c10 = float(_cl.iloc[-11])
+                                _nc_pre = _m * (_c0 - _c10) / atr
+                                _nc_acc = _m * (((_c0 - _c5) / 5.0) -
+                                                ((_c5 - _c10) / 5.0)) / atr
+                                if _nc_pre > float(_nc.get("pre_atr", 2.5)
+                                                   or 0) and _nc_acc > 0:
+                                    _chased = True
+                                    print(f"  [nochase] SKIP {sig} chase "
+                                          f"(pre {_nc_pre:+.2f} ATR, accel "
+                                          f"{_nc_acc:+.2f}/bar)")
+                        except Exception as _nce:
+                            print(f"[nochase] check error: {_nce}")
+                    if _chased:
+                        # SET B PIGGYBACK ECU (user 2026-10-12): Set A stands
+                        # down; Set B experiments with pocket money - a 0.01
+                        # scout WITH the move (fomorian-sim) + a 0.03 fade
+                        # AGAINST it (hunt-rider). Own magic, own broker
+                        # SL/TP, never managed, never counted in Set A.
+                        # Fires ONLY on chase-skips, max one pair at a time,
+                        # and never while Set A holds a book (sensors wait).
+                        _sb = cfg.get("setb") or {}
+                        if _sb.get("on"):
+                            _tkb = mt5.symbol_info_tick(cfg["symbol"])
+                            _syb = mt5.symbol_info(cfg["symbol"])
+                            _b_busy = False
+                            try:
+                                for _o in (mt5.orders_get(
+                                        symbol=cfg["symbol"]) or []):
+                                    if _o.magic == SETB_MAGIC:
+                                        _b_busy = True
+                                        break
+                                if not _b_busy:
+                                    for _q in (mt5.positions_get(
+                                            symbol=cfg["symbol"]) or []):
+                                        if _q.magic == SETB_MAGIC:
+                                            _b_busy = True
+                                            break
+                            except Exception:
+                                _b_busy = True   # unknown state: don't fire
+                            if _tkb is not None and _syb is not None \
+                                    and not _b_busy and not positions \
+                                    and stop_dist and stop_dist > 0:
+                                _sd = float(stop_dist)
+                                _slr = float(_sb.get("sl_r", 1.0) or 0)
+                                _pairs = [
+                                    ("SCOUT", sig,
+                                     float(_sb.get("scout_lots", 0.01) or 0),
+                                     float(_sb.get("scout_tp_r", 1.0) or 0)),
+                                    ("FADE",
+                                     "SHORT" if sig == "LONG" else "LONG",
+                                     float(_sb.get("fade_lots", 0.03) or 0),
+                                     float(_sb.get("fade_tp_r", 4.0) or 0))]
+                                for _tag, _dd, _ll, _tpr in _pairs:
+                                    if _slr <= 0 or _tpr <= 0:
+                                        continue
+                                    _ll = max(_syb.volume_min or 0.01,
+                                              round(_ll, 2))
+                                    _tkb = mt5.symbol_info_tick(
+                                        cfg["symbol"])
+                                    if _tkb is None:
+                                        break
+                                    if _dd == "LONG":
+                                        _ppx = _tkb.ask
+                                        _ott = mt5.ORDER_TYPE_BUY
+                                        _ssl = _ppx - _sd * _slr
+                                        _ttp = _ppx + _sd * _tpr
+                                    else:
+                                        _ppx = _tkb.bid
+                                        _ott = mt5.ORDER_TYPE_SELL
+                                        _ssl = _ppx + _sd * _slr
+                                        _ttp = _ppx - _sd * _tpr
+                                    _rq = {"action": mt5.TRADE_ACTION_DEAL,
+                                           "symbol": cfg["symbol"],
+                                           "volume": _ll, "type": _ott,
+                                           "price": _ppx, "deviation": 30,
+                                           "sl": round(_ssl, 2),
+                                           "tp": round(_ttp, 2),
+                                           "magic": SETB_MAGIC,
+                                           "comment": "SETB-" + _tag,
+                                           "type_time": mt5.ORDER_TIME_GTC,
+                                           "type_filling": fill_mode}
+                                    _rs = mt5.order_send(_rq)
+                                    _rc = _rs.retcode if _rs else "None"
+                                    print(f"[setb] {_tag} {_dd} {_ll} @ "
+                                          f"{_ppx:.2f} SL {_ssl:.2f} TP "
+                                          f"{_ttp:.2f} (gyro pre "
+                                          f"{_nc_pre:+.2f} acc "
+                                          f"{_nc_acc:+.2f}) -> "
+                                          f"retcode={_rc}")
+                            elif _b_busy:
+                                print("[setb] pair already out - sensors wait")
+                        sig = None
+                        pending = None   # verticals don't un-chase: no retry
                     acc_now = mt5.account_info()
                     if acc_now is None or sym is None:
                         print("[warn] account/symbol unavailable - signal skipped, retry next bar")
