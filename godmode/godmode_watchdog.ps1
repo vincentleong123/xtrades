@@ -68,7 +68,10 @@ while ($true) {
         continue
     }
 
-    $termRunning = [bool](Get-Process -Name terminal64 -ErrorAction SilentlyContinue)
+    # MT4 build: the trader talks to MT4 (terminal.exe) via the file bridge.
+    # (An old revision gated on the MT5 terminal64.exe, which left START BOT
+    # dead whenever MT5 was closed even with MT4 running fine.)
+    $termRunning = [bool](Get-Process -Name terminal -ErrorAction SilentlyContinue)
 
     # ---- bridge: HTTP probe, kill if hung ----
     if (-not (Test-Bridge)) {
@@ -96,7 +99,7 @@ while ($true) {
                 continue
             }
         }
-        if ($termWasDown) { Log 'terminal64 up again'; $termWasDown = $false }
+        if ($termWasDown) { Log 'MT4 terminal up again'; $termWasDown = $false }
     } else {
         if ($termRunning) {
             Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', 'python -u mt5_bot_v2.py >> bot_live.log 2>> bot_live_err.log' -WorkingDirectory $g -WindowStyle Hidden
@@ -104,7 +107,7 @@ while ($true) {
             Log 'trader started (terminal up)'
             Start-Sleep -Seconds 6
         } else {
-            if (-not $termWasDown) { Log 'terminal64 not running - waiting'; $termWasDown = $true }
+            if (-not $termWasDown) { Log 'MT4 terminal not running - waiting'; $termWasDown = $true }
         }
     }
 }

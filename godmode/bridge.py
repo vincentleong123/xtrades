@@ -101,6 +101,34 @@ class Handler(BaseHTTPRequestHandler):
                 except OSError:
                     pass
             self._json(200, out)
+        elif self.path == "/api/bars" or self.path.startswith("/api/bars?"):
+            # live bars straight from the terminal (fresh to the minute).
+            # TFs served per request; 2min etc. resampled inside mt4link.
+            # Dashboard merges just the delta onto its file snapshot.
+            try:
+                from urllib.parse import urlparse, parse_qs
+                q = parse_qs(urlparse(self.path).query)
+                symbol = (q.get("symbol", ["XAUUSD"])[0] or "XAUUSD")[:12]
+                tfname = (q.get("tf", ["1min"])[0] or "1min").lower()
+                count = max(50, min(5000, int(q.get("count", ["500"])[0] or 500)))
+                import mt4link as _ml
+                _tfmap = {"1min": "M1", "2min": "M2", "5min": "M5",
+                          "15min": "M15", "30min": "M30", "1hour": "H1",
+                          "4hour": "H4", "daily": "D1"}
+                const = getattr(_ml, "TIMEFRAME_" + _tfmap.get(tfname, ""), None)
+                if const is None:
+                    self._json(400, {"error": "unknown tf (1min/2min/5min/15min/30min/1hour/4hour/daily)"})
+                    return
+                arr = _ml.copy_rates_from_pos(symbol, const, 0, count)
+                if arr is None:
+                    self._json(503, {"error": "no bars (EA unreachable or market closed)"})
+                    return
+                bars = [[int(r[0]), round(float(r[1]), 2), round(float(r[2]), 2),
+                         round(float(r[3]), 2), round(float(r[4]), 2)] for r in arr[-count:]]
+                self._json(200, {"symbol": symbol, "tf": tfname, "count": len(bars),
+                                 "bars": bars, "server_ts": time.time()})
+            except Exception as e:
+                self._json(500, {"error": "bars failed: %s" % str(e)[:120]})
         elif self.path == "/api/cmd-result":
             if os.path.exists(CMD_RESULT_PATH):
                 try:
@@ -155,7 +183,7 @@ class Handler(BaseHTTPRequestHandler):
                     pass
             self._json(200, {"ok": True, "removed": removed,
                              "note": "watchdog starts the bot within ~35s "
-                                     "(needs MT5 open + Algo Trading ON)"})
+                                     "(needs MT4 open + AutoTrading ON)"})
             return
         if self.path == "/api/cmd":
             length = int(self.headers.get("Content-Length", 0))

@@ -1,30 +1,68 @@
 {
+  "backend": "mt4",
   "symbol": "XAUUSD",
-  "timeframe": "1min",
-  "ema_fast": 10,
-  "ema_slow": 28,
+  "timeframe": "2min",
+  "ema_fast": 5,
+  "ema_slow": 27,
   "atr_period": 14,
-  "atr_stop_mult": 3,
+  "atr_stop_mult": 1,
   "rr_ratio": 5,
   "risk_pct": 5,
-  "base_lots": 0.01,
+  "base_lots": 0.45,
   "max_concurrent": 3,
   "wick_proof_stop": true,
   "disaster_stop_mult": 1.5,
   "profit_target_usd": 100,
-  "max_leverage": 10,
+  "equity_floor_usd": 400,
+  "entry_mode": "cross",
+  "mission_hours": 0,
+  "time_stop_s": 0,
+  "auto_close": true,
   "cycle_seconds": 5,
-  "cooldown_checks": 3,
-  "start_balance_paper": 500,
+  "ultra_mode": false,
+  "loss_cooldown_s": 30,
+  "regime_gate_mode": "adx",
+  "regime_gate_thr": 13,
+  "whip_break_n": 2,
+  "whip_break_bars": 45,
   "gates": {
-    "breakout_n": 20,
-    "atr_expansion": true,
+    "breakout_n": 15,
+    "atr_expansion": false,
     "atr_expansion_period": 50,
-    "breakeven_r": 1
+    "breakeven_r": 1.0
   },
   "radar": {
     "stand_down_score": 70,
     "flatten_score": 90
   },
-  "bank_mode": true
+  "exit_engine": {
+    "on": true,
+    "min_peak": 2.0,
+    "lock_atr_off": 999,
+    "retrace_pct": 70,
+    "ha_flip": true,
+    "hold_max_s": 55,
+    "stale_frac": 0.25
+  },
+  "bank_mode": false,
+  "auto_tune": true,
+  "limit_ladder": {
+    "on": true,
+    "layers": 3,
+    "weights": [
+      0.5,
+      0.3,
+      0.2
+    ],
+    "step_atr": 0.2,
+    "ttl_s": 300
+  },
+  "cost": {
+    "max_rt_pct": 20,
+    "min_rt_usd": 0.25,
+    "limit_peg_atr": 0.04
+  },
+  "sine_brain": false,
+  "pyramid_min_atr": 1.5,
+  "sine_min_r2": 0.15
 }

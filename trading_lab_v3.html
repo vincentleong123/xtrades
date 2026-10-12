@@ -1,0 +1,3308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XAUUSD Lab — strategy cockpit</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+        background: #0a0e1a; color: #ffffff;
+        padding: 14px; font-size: 13px;
+    }
+    .layout { max-width: 1500px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+    .pagebox { display: grid; grid-template-columns: 390px 1fr; gap: 12px; align-items: start; }
+    @media (max-width: 1000px) { .pagebox { grid-template-columns: 1fr; } }
+    .panel { display: flex; flex-direction: column; gap: 12px; }
+
+    .header-bar {
+        background: #12172a; border: 1px solid #262c44; border-radius: 10px;
+        padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .header-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .header-bar h1 { color: #ffd700; font-size: 17px; letter-spacing: 1px; }
+    .header-bar .defaults-sub { color: #ffffff; font-size: 12px; font-family: Consolas, monospace; }
+
+    .card {
+        background: #12172a; border: 1px solid #262c44;
+        border-radius: 10px; padding: 12px;
+        display: flex; flex-direction: column; gap: 8px;
+    }
+    .card h3 {
+        color: #ffd700; font-size: 12px; text-transform: uppercase;
+        letter-spacing: .8px; display: flex; justify-content: space-between; align-items: baseline;
+        gap: 10px; flex-wrap: wrap;
+    }
+    .card h3 .sub { color: #ffffff; font-size: 11px; text-transform: none; letter-spacing: 0; }
+
+    .wallet-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .wstat { background: #0b0f18; border: 1px solid #22283a; border-radius: 8px; padding: 8px 10px; }
+    .wstat label { font-size: 11px; color: #ffffff; text-transform: uppercase; letter-spacing: .5px; }
+    .wstat .wval { font-family: Consolas, monospace; font-size: 17px; font-weight: 700; color: #ffffff; margin-top: 2px; }
+    .wstat .wval.gold  { color: #ffd700; }
+    .wstat .wval.green { color: #00ff88; }
+    .wstat .wsub { font-size: 11px; color: #ffffff; font-family: Consolas, monospace; margin-top: 1px; }
+    .vaultbar { height: 12px; background: #0b0f18; border: 1px solid #22283a; border-radius: 7px; overflow: hidden; }
+    .vaultfill { height: 100%; width: 0%; border-radius: 6px; background: linear-gradient(90deg, #00c96a, #00ff88, #ffd700); transition: width .4s ease; }
+    .vaultsteps { display: flex; justify-content: space-between; font-family: Consolas, monospace; font-size: 11px; color: #ffffff; }
+
+    .input-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+    .input-group { display: flex; flex-direction: column; gap: 3px; }
+    .input-group label { font-size: 11px; color: #ffffff; text-transform: uppercase; letter-spacing: .5px; }
+    .input-group input, .input-group select {
+        background: #1b2136; border: 1px solid #2c3350; color: #ffffff;
+        padding: 5px 7px; border-radius: 4px; font-size: 12px; width: 100%;
+    }
+    .input-group input:focus { outline: none; border-color: #ffd700; }
+    .input-group input[disabled] { color: #8fd3ff; border-style: dashed; }
+    .chkrow { display: flex; align-items: center; gap: 6px; padding-top: 12px; grid-column: span 2; }
+    .chkrow label { font-size: 12px; color: #ffffff; margin: 0; }
+    .chkrow input { width: auto; }
+
+    .tfrow { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; }
+    .speed-btn {
+        padding: 6px 4px; border-radius: 4px; border: 1.5px solid #2c3350;
+        background: #1b2136; color: #ffffff; cursor: pointer; text-align: center; font-size: 12px; font-weight: 600;
+    }
+    .speed-btn:hover { border-color: #ffd700; }
+    .speed-btn.active { border-color: #ffd700; background: rgba(255,215,0,.12); color: #ffd700; }
+
+    .btnrow { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+    .btn {
+        padding: 7px 13px; border-radius: 5px; border: none; cursor: pointer;
+        font-size: 12px; font-weight: 700; letter-spacing: .3px;
+    }
+    .btn-primary { background: #ffd700; color: #12172a; }
+    .btn-secondary { background: #2c3350; color: #ffffff; }
+    .btn-success { background: #00ff88; color: #12172a; }
+    .btn-danger  { background: #ff5c5c; color: #12172a; }
+    .btn[disabled] { opacity: .35; cursor: not-allowed; filter: grayscale(1); }
+    .btn.busy { position: relative; color: transparent !important; }
+    .btn.busy::after {
+        content: ''; position: absolute; inset: 0; margin: auto;
+        width: 11px; height: 11px; border-radius: 50%;
+        border: 2px solid rgba(18,23,42,.35); border-top-color: #12172a;
+        animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .btn-note { font-size: 11.5px; color: #ffffff; min-height: 11px; }
+
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+        font-size: 11.5px; font-weight: 700; letter-spacing: .3px;
+        padding: 3px 9px; border-radius: 20px; border: 1px solid;
+        display: inline-flex; align-items: center; gap: 5px;
+        font-family: Consolas, monospace;
+    }
+    .chip .led { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .chip.ok   { color: #00ff88; border-color: #00ff8855; background: #00ff8812; }
+    .chip.warn { color: #ffd166; border-color: #ffd16655; background: #ffd16612; }
+    .chip.bad  { color: #ff6b6b; border-color: #ff6b6b55; background: #ff6b6b12; }
+    .chip.idle { color: #ffffff; border-color: #ffffff55; background: #ffffff10; }
+
+    .mono-line {
+        font-family: Consolas, monospace; font-size: 12px; line-height: 1.6;
+        background: #0b0f18; border: 1px solid #22283a; border-radius: 6px; padding: 7px 10px;
+        word-break: break-word;
+    }
+    .mono-line.b { border-color: #ffd16688; }
+    .resline { min-height: 13px; font-family: Consolas, monospace; font-size: 12px; color: #ffffff; opacity: 1; transition: opacity .3s; }
+
+    .alertbox {
+        background: #3a2b00; border: 1px solid #ffd166; color: #ffd166;
+        border-radius: 6px; padding: 7px 10px; font-size: 12px;
+    }
+
+    .actlog {
+        background: #0b0f18; border: 1px solid #22283a; border-radius: 6px;
+        max-height: 130px; overflow-y: auto;
+        font-family: Consolas, monospace; font-size: 12px; line-height: 1.55;
+    }
+    .actlog .row { padding: 3px 9px; border-bottom: 1px solid #161b28; display: flex; gap: 8px; }
+    .actlog .row:last-child { border-bottom: none; }
+    .actlog .t { color: #ffffff; flex: 0 0 auto; }
+    .actlog .m { flex: 1 1 auto; word-break: break-word; }
+    .actlog .ok .m   { color: #00ff88; }
+    .actlog .err .m  { color: #ff6b6b; }
+    .actlog .wait .m { color: #ffd166; }
+    .actlog .info .m { color: #ffffff; }
+    .actlog .warn .m { color: #ffd166; }
+
+    .chart-window {
+        background: #12172a; border: 1px solid #262c44; border-radius: 10px; padding: 12px;
+    }
+    .chart-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .chart-title { color: #ffd700; font-size: 12px; font-weight: bold; }
+    .chart-type-selector { display: flex; gap: 4px; flex-wrap: wrap; }
+    .chart-type-btn {
+        padding: 3px 9px; border-radius: 3px; border: 1px solid #2c3350;
+        background: #1b2136; color: #ffffff; cursor: pointer; font-size: 11px; font-weight: 600;
+    }
+    .chart-type-btn.active, .view-btn.active { background: #ffd700; color: #12172a; border-color: #ffd700; }
+    .data-badge {
+        padding: 3px 8px; border-radius: 4px; font-family: Consolas, monospace;
+        font-size: 11px; font-weight: bold; letter-spacing: .4px;
+    }
+    .data-badge.real { background: rgba(0,255,136,.12); color: #00ff88; border: 1px solid rgba(0,255,136,.4); }
+    .data-badge.synth { background: rgba(255,68,68,.12); color: #ff6b6b; border: 1px solid rgba(255,68,68,.4); }
+    #priceChart { width: 100%; height: 300px; cursor: grab; touch-action: pan-y; }
+    #priceChart.grabbing { cursor: grabbing; }
+
+.statsline { font-family: Consolas, monospace; font-size: 12px; color: #ffffff; }
+.statsline b { color: #ffd700; }
+/* ---- BIG WIN-RATE HERO (Play button result, front and center) ---- */
+.wr-hero { display:flex; align-items:center; gap:18px; margin-top:10px; padding:12px 16px;
+  background:linear-gradient(135deg, rgba(255,215,0,.07), rgba(0,0,0,.25)); border:1px solid #2c3350;
+  border-radius:8px; }
+.wr-big { font-family:Consolas, monospace; font-size:68px; font-weight:800; line-height:1;
+  color:#ffd700; text-shadow:0 0 20px rgba(255,215,0,.35); min-width:200px; text-align:center;
+  letter-spacing:-2px; }
+.wr-big.good { color:#00ff88; text-shadow:0 0 20px rgba(0,255,136,.35); }
+.wr-big.bad { color:#ff4d4d; text-shadow:0 0 20px rgba(255,77,77,.35); }
+.wr-lab { font-size:13px; color:#9aa4b2; letter-spacing:3px; font-weight:700; }
+.wr-mode { display:inline-block; margin-left:8px; font-size:11px; letter-spacing:0; color:#ffd700;
+  background:rgba(255,215,0,.1); border:1px solid rgba(255,215,0,.35); border-radius:4px; padding:1px 6px; }
+.wr-sub { font-family:Consolas, monospace; font-size:14px; color:#ffffff; margin-top:5px; }
+.wr-note { font-size:12px; color:#ffb84d; margin-top:4px; }
+/* ---- VS LIVE ACCOUNT card ---- */
+.vs-grid { display:flex; gap:18px; flex-wrap:wrap; }
+.vs-live { flex:1; min-width:300px; font-family:Consolas, monospace; font-size:13px; color:#ffffff;
+  background:#141a2e; border:1px solid #2c3350; border-radius:6px; padding:10px 12px; }
+.vs-k { font-size:11px; letter-spacing:2px; color:#9aa4b2; margin-bottom:6px; }
+.vs-age { color:#00ff88; }
+.vs-age.stale { color:#ff4d4d; }
+.vs-line { margin-top:3px; }
+.vs-line b { color:#ffd700; }
+.vs-watch { flex:1; min-width:320px; margin:0; padding-left:18px; font-size:13px; color:#e0e0e0; }
+.vs-watch li { margin-bottom:6px; }
+.vs-watch b { color:#ffd700; }
+.vs-watch .hl { color:#ff4d4d; font-weight:700; }
+
+    /* profit meter gauge for the strategy back-test panel */
+    /* ---- PRACTICE WALLET STRIP (live wallet during replay) ---- */
+    .wallet-strip {
+        display: flex; gap: 14px; align-items: center; margin-top: 8px;
+        padding: 10px 14px; background: linear-gradient(135deg, #12172a, #171d34);
+        border: 1px solid #2c3350; border-radius: 8px;
+    }
+    .ws-label { font-size: 11px; letter-spacing: 2px; color: #ffffff; font-family: Consolas,monospace; }
+    .ws-bal { font-size: 28px; font-weight: 800; font-family: Consolas,monospace; color: #ffd700; line-height: 1.15; }
+    .ws-mid { flex: 1; min-width: 0; }
+    .ws-delta { font-size: 13px; font-weight: 700; font-family: Consolas,monospace; color: #ffffff; }
+    .ws-delta.up { color: #00ff88; text-shadow: 0 0 8px #00ff8844; }
+    .ws-delta.down { color: #ff5c5c; text-shadow: 0 0 8px #ff5c5c44; }
+    .ws-bar { height: 7px; background: #1b2136; border: 1px solid #242a42; border-radius: 4px; margin-top: 6px; overflow: hidden; }
+    .ws-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ffd700, #00ff88); transition: width .35s ease; }
+    .ws-fill.down { background: linear-gradient(90deg, #ff9c5c, #ff5c5c); }
+    .ws-meta { font-size: 12px; color: #ffffff; font-family: Consolas,monospace; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pm-row {
+        display: flex; align-items: center; gap: 14px; margin-top: 8px;
+        background: #0b0f18; border: 1px solid #22283a; border-radius: 8px;
+        padding: 8px 12px;
+    }
+    .pm-svg { width: 205px; height: 124px; flex: 0 0 auto; display: block; }
+    .pm-caption {
+        flex: 1; font-family: Consolas, monospace; font-size: 12px;
+        color: #ffffff; line-height: 1.7;
+    }
+    .pm-caption b { color: #ffffff; }
+
+    .trade-list {
+        background: #0b0f18; border: 1px solid #22283a; border-radius: 6px;
+        max-height: 520px; overflow-y: auto; padding: 6px 4px;
+    }
+    .trade-item {
+        display: grid; grid-template-columns: 34px 1fr 74px; gap: 6px;
+        padding: 4px 6px; margin: 2px 0; border-radius: 4px;
+        font-size: 12px; border-left: 3px solid; font-family: Consolas, monospace;
+    }
+    .trade-item.win   { border-color: #00ff88; background: rgba(0,255,136,.05); }
+    .trade-item.loss  { border-color: #ff4444; background: rgba(255,68,68,.05); }
+    .trade-item.current { animation: pulse 1.5s infinite; border-color: #ffd700; }
+    @keyframes pulse { 0%,100% { background: rgba(255,215,0,.08); } 50% { background: rgba(255,215,0,.22); } }
+    .trade-num { color: #ffffff; font-weight: bold; }
+    .trade-when { color: #ffffff; font-size: 11px; margin-top: 1px; }
+    .trade-dir { font-weight: bold; }
+    .trade-dir.long { color: #00ff88; }
+    .trade-dir.short { color: #ff4444; }
+    .trade-pnl { font-weight: bold; text-align: right; }
+    .trade-pnl.positive { color: #00ff88; }
+    .trade-pnl.negative { color: #ff4444; }
+
+    #botConsole {
+        background: #0b0f18; border: 1px solid #22283a; border-radius: 6px;
+        height: 300px; overflow-y: auto; padding: 8px 10px;
+        font-family: Consolas, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap;
+    }
+    .db-entry { padding: 2px 0; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+    <div class="header-bar">
+        <div class="header-top">
+                <div>
+                    <h1 id="cockpitTitle">XAUUSD COCKPIT</h1>
+                    <p id="liveStatus" style="color:#8fd3ff; font-size:12px; margin-top:2px;">connecting to bridge...</p>
+                    <div class="defaults-sub" id="defaultsSub">refresh: TF mirrors RUNNING bot &middot; EMA 5/27 &middot; x1 &middot; RR5 &middot; risk 5% &middot; max 3 &middot; wick on &middot; dis 1.5 &middot; last 8 trade days</div>
+                </div>
+            <div class="btnrow">
+                <button class="btn btn-success" id="btnStartBot" onclick="startBot()">START BOT</button>
+                <button class="btn btn-danger" id="btnStopBot" onclick="stopBot()">STOP BOT</button>
+            </div>
+        </div>
+        <div class="chips" id="liveChips"></div>
+        <div id="autoTradeWarn" class="alertbox" style="display:none;">
+            <b>AutoTrading is OFF in MT4</b> &mdash; click the <i>AutoTrading</i> button in the MT4 toolbar (Ctrl+E).
+        </div>
+        <div class="btn-note" id="startNote"></div>
+    </div>
+
+    <div class="pagebox">
+
+        <div class="panel">
+
+            
+
+            <div class="card">
+                <h3>Strategy <span class="sub">inputs drive sim + bot &middot; live gates: breakout15 + BE1R &middot; ATRexp OFF</span></h3>
+                <div class="tfrow">
+                    <div class="speed-btn active" data-speed="1min"  onclick="selectSpeed('1min')">1M</div>
+                    <div class="speed-btn" data-speed="2min"  onclick="selectSpeed('2min')">2M</div><div class="speed-btn" data-speed="3min" onclick="selectSpeed('3min')">3M</div>
+                    <div class="speed-btn" data-speed="5min"  onclick="selectSpeed('5min')">5M</div>
+                    <div class="speed-btn" data-speed="15min" onclick="selectSpeed('15min')">15M</div>
+                    <div class="speed-btn" data-speed="30min" onclick="selectSpeed('30min')">30M</div>
+                    <div class="speed-btn" data-speed="1hour" onclick="selectSpeed('1hour')">1H</div>
+                    <div class="speed-btn" data-speed="4hour" onclick="selectSpeed('4hour')">4H</div>
+                    <div class="speed-btn" data-speed="daily" onclick="selectSpeed('daily')">D</div>
+                </div>
+                <div class="input-grid">
+                    <div class="input-group"><label>EMA Fast</label><input type="number" id="emaFast" value="5" min="2" max="50"></div>
+                    <div class="input-group"><label>EMA Slow</label><input type="number" id="emaSlow" value="27" min="4" max="100"></div>
+                    <div class="input-group"><label>ATR Stop (x)</label><input type="number" id="atrStop" value="1" step="0.5" min="1" max="5"></div>
+                    <div class="input-group"><label>R:R Ratio</label><input type="number" id="rrRatio" value="5" step="0.5" min="1" max="10"></div>
+                    <div class="input-group"><label>Risk %</label><input type="number" id="riskPct" value="5" step="0.5" min="0.5" max="50"></div>
+                    <div class="input-group">
+                        <label>Max Concurrent</label>
+                        <input type="number" id="maxConcurrent" value="3" min="1" max="99">
+                    </div>
+                    <div class="input-group"><label>Min lots (floor)</label><input type="number" id="baseLots" value="0.45" step="0.01" min="0.01" title="Minimum lots per position - lifts small-size trades. Scales DOLLARS not edge (expectancy flat); bigger lots trip the $2 GIVE peak sooner"></div>
+                    <div class="input-group"><label>Start Bal ($) sim</label><input type="number" id="startBalance" value="500" step="50"></div>
+                    <div class="chkrow"><input type="checkbox" id="wickProof" checked><label for="wickProof">Wick-Proof Stop</label><input type="number" id="disasterMult" value="1.5" step="0.25" min="1" max="3" style="width:58px;" title="Disaster stop (x)"></div>
+                    <div class="chkrow"><input type="checkbox" id="exitEngine" checked><label for="exitEngine">Exit-Engine GIVE</label><span style="font-size:11px;color:#8b93a7;">heartbeat: OFF (let waves complete)</span></div>
+                    <div class="input-group"><label>GIVE peak $</label><input type="number" id="givePeak" value="2" step="0.5" min="0.5" title="Exit-engine wakes once floating profit reaches this $ peak (live: 2.0)"></div>
+                    <div class="input-group"><label>GIVE keep %</label><input type="number" id="giveKeepPct" value="30" step="5" min="5" max="95" title="% of the peak you insist on keeping - exits when less remains (live retrace 70% = keep 30%)"></div>
+                    <div class="chkrow"><input type="checkbox" id="squeezeOn"><label for="squeezeOn">Squeeze-ball block</label><input type="number" id="squeezePct" value="70" step="5" min="10" max="95" style="width:58px;" title="Block entries while ATR14 is below this % of ATR50 - coiled oval chop"></div>
+                    <div class="chkrow"><input type="checkbox" id="crossOn" checked><label for="crossOn">Cross entries (EMA cross)</label><span style="font-size:11px;color:#8b93a7;">heartbeat: off, sine rides only</span></div>
+                    <div class="chkrow"><input type="checkbox" id="alignOn"><label for="alignOn">Align entries (MACD x Stoch)</label><span style="font-size:11px;color:#8b93a7;">sim-only test, 4-line confluence</span></div>
+                    <div class="chkrow"><input type="checkbox" id="fadeOn"><label for="fadeOn">Horn-fade entries</label><span style="font-size:11px;color:#8b93a7;">sim-only test, anti-FOMO limits</span></div>
+                    <div class="input-group"><label>Fade spike $</label><input type="number" id="fadeSpike" value="2" step="0.5" min="0.5" title="Wick must pierce the N-bar extreme by this $ and close back off it"></div>
+                    <div class="input-group"><label>Fade lookback</label><input type="number" id="fadeN" value="20" step="1" min="5" max="200" title="Extreme measured over this many prior bars"></div>
+                    <div class="chkrow"><input type="checkbox" id="reloadOn"><label for="reloadOn">Reload re-entry (second chance)</label><span style="font-size:11px;color:#8b93a7;">limit back at banked entry, same TP, 300s TTL</span></div>
+                    <div class="chkrow"><input type="checkbox" id="sineOn"><label for="sineOn">Sine-wave entries</label><span style="font-size:11px;color:#8b93a7;">HEARTBEAT engine: limit at turn, TP opposite extreme, accel-flip exit</span></div>
+                    <div class="chkrow"><input type="checkbox" id="fibOn"><label for="fibOn">Fib 61.8% fades</label><input type="number" id="fibN" value="50" step="5" min="10" max="200" style="width:58px;" title="Swing measured over N bars"></div>
+                    <div class="chkrow"><input type="checkbox" id="beatOn"><label for="beatOn">Heartbeat force (sine-ride)</label><span style="font-size:11px;color:#8b93a7;">sim-only test, forced wave trades</span></div>
+                    <div class="chkrow"><input type="checkbox" id="roundOn"><label for="roundOn">Round-number fades ($25 grid)</label><span style="font-size:11px;color:#8b93a7;">sim-only test, fade the line rejection</span></div>
+                    <div class="chkrow"><input type="checkbox" id="fomoOn"><label for="fomoOn">FOMO-exhaustion fades</label><input type="number" id="fomoN" value="4" step="1" min="2" max="12" style="width:58px;" title="Fade after this many consecutive same-direction closes"></div>
+                    <div class="chkrow"><input type="checkbox" id="tightTP"><label for="tightTP">TP-tighten to chop extreme</label><span style="font-size:11px;color:#8b93a7;">sim-only test, live exit-engine rule</span></div>
+                    <div class="input-group"><label>Max hold bars</label><input type="number" id="maxHold" value="0" step="5" min="0" max="500" title="0 = off. Underwater positions older than this close flat (anti-bleed, targets disaster stops)"></div>
+                    <div class="chkrow"><input type="checkbox" id="vwapOn"><label for="vwapOn">VWAP band-fades</label><span style="font-size:11px;color:#8b93a7;">sim-only test, outer band to VWAP magnet</span></div>
+                    <div class="input-group"><label>VWAP entry K</label><input type="number" id="vwapKEntry" value="2" step="0.5" min="0.5" max="5" title="Fade the band this many session-sigmas out"></div>
+                    <div class="input-group"><label>VWAP stop K</label><input type="number" id="vwapKStop" value="3" step="0.5" min="1" max="6" title="Stop at the next band out (the line where big changes occur)"></div>
+                    <div class="input-group"><label>Ladder L1 %</label><input type="number" id="lw1" value="50" step="5" min="0" max="100" title="Layer weight % of signal size (normalized)"></div>
+                    <div class="input-group"><label>Ladder L2 %</label><input type="number" id="lw2" value="30" step="5" min="0" max="100"></div>
+                    <div class="input-group"><label>Ladder L3 %</label><input type="number" id="lw3" value="20" step="5" min="0" max="100"></div>
+                    <div class="input-group"><label>Profit Target $</label><input type="number" id="profitTarget" value="100" step="100" min="0"></div>
+                    <div class="input-group"><label>Spread (pts)</label><input type="number" id="spreadPts" value="34" step="1" min="0" max="500" title="Live HFM XAUUSD spread in points (0.01 each) - charged on every fill"></div>
+                    <div class="input-group"><label>Goal $ (bank it)</label><input type="number" id="goalBalance" value="" step="100" min="500" title="Optional: bank profits here and restart the $500 journey. Empty = compound freely (spread, margin and 100-lot broker caps still apply)"></div>
+                    <div class="input-group"><label>Floor $ (ruin stop)</label><input type="number" id="floorBalance" value="400" step="50" min="0" title="Stop opening new trades below this balance - catastrophe insurance so no path can grind you to broke. Existing positions still ride to exits. 0/empty = off"></div>
+                </div>
+                <div class="btnrow">
+                    <button class="btn btn-primary" id="btnPushStrategy" onclick="pushStrategy()">PUSH TO BOT</button>
+                    <button class="btn btn-secondary" onclick="resetBest()">RESET TO BEST</button>
+                    <button class="btn btn-secondary" id="btnTune" onclick="fineTune()" title="Grid-search EMA x RR x keep% on the current range, apply the winner">FINE-TUNE</button>
+                    <button class="btn btn-primary" id="btnApply" onclick="applyStaged()" disabled style="opacity:0.45;" title="Apply staged input changes with a fresh run from trade 1">APPLIED &#10003;</button>
+                    <button class="btn btn-success" onclick="heartbeatDemo()" title="Sine-wave heartbeat preset: XAUUSD 1M, sine-only, accel-flip exits, Oct 7 wave day">HEARTBEAT DEMO</button>
+                    <span class="mono-line" id="liveStrategy" style="flex:1 1 100%;">
+                        <span style="color:#ffffff;">RUNNING:</span> reading bot...
+                    </span>
+                </div>
+                <div class="resline" id="tuneResults" style="display:none;"></div>
+                <div class="resline" id="simNote">Mirror preset - follows the live file (now 1M) cross+GIVE engine, $500 base - refresh replays it</div>
+            </div>
+
+            <div class="card">
+                <h3>Execute <span class="sub">manual orders go through the bot&rsquo;s MT4 connection</span></h3>
+                <div class="btnrow">
+                    <button class="btn btn-success" id="btnBuy"  onclick="sendCmd('buy')">BUY</button>
+                    <button class="btn btn-danger"  id="btnSell" onclick="sendCmd('sell')">SELL</button>
+                    <button class="btn btn-secondary" id="btnCloseAll" onclick="sendCmd('close_all')" style="background:#ffd166;color:#12172a;">CLOSE ALL</button>
+                    <span style="font-size:12px;color:#ffffff;" id="cockpitWhy"></span>
+                </div>
+                <div class="input-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="input-group"><label>Equity / Balance</label><input type="text" id="cockpitEquity" disabled></div>
+                    <div class="input-group"><label>Radar</label><input type="text" id="cockpitRadar" disabled></div>
+                    <div class="input-group"><label>Open Positions</label><input type="text" id="cockpitPos" disabled></div>
+                </div>
+                <div class="resline" id="paceLine">live pace: waiting for bridge…</div>
+                <div class="actlog" id="actLog"></div>
+            </div>
+
+        </div>
+
+        <div class="panel">
+
+            <div class="chart-window">
+                <div class="chart-header">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <div class="chart-title" id="chartTitle">XAU/EUR</div>
+                        <span class="data-badge synth" id="dataBadge">LOADING...</span>
+                    </div>
+                        <div class="chart-type-selector">
+                            <button class="chart-type-btn" id="btnDataEur" onclick="setDataSource('eur')">XAU/EUR</button>
+                            <button class="chart-type-btn" id="btnDataUsd" onclick="setDataSource('usd')">XAU/USD</button>
+                        </div>
+                        <div class="chart-type-selector">
+                        <button class="chart-type-btn view-btn active" id="btnFollow" onclick="setViewFollow()">Follow trade</button>
+                        <button class="chart-type-btn view-btn" id="btnLive" onclick="setViewLive()">Live</button>
+                        <button class="chart-type-btn active" onclick="setChartType('candlestick')">Candles</button>
+                        <button class="chart-type-btn" onclick="setChartType('heiken')">Heiken</button>
+                    </div>
+                </div>
+                <canvas id="priceChart"></canvas>
+                <div class="btnrow" style="margin-top:8px;">
+                    <button class="btn btn-primary" id="btnPlay" onclick="togglePlay()">Play</button>
+                    <button class="btn btn-secondary" onclick="resetReplay()">Reset</button>
+                    <button class="btn btn-secondary" onclick="stepForward()">Next</button>
+                    <span style="font-size:12px;color:#ffffff;margin-left:auto;">Speed</span>
+                    <input type="range" id="playbackSpeed" min="1" max="100" value="20" style="width:90px;" onchange="updatePlaybackSpeed()">
+                    <span class="statsline" id="playbackLabel" style="min-width:28px;">2x</span>
+                    <button class="btn btn-secondary" onclick="clearRange()">All data</button>
+                    <input type="datetime-local" id="rangeFrom" step="600" style="background:#1b2136;border:1px solid #2c3350;color:#ffffff;border-radius:4px;padding:4px 6px;font-size:12px;">
+                    <input type="datetime-local" id="rangeTo" step="600" style="background:#1b2136;border:1px solid #2c3350;color:#ffffff;border-radius:4px;padding:4px 6px;font-size:12px;">
+                    <button class="btn btn-secondary" onclick="applyRange()">Apply range</button>
+                </div>
+                <div class="btnrow" style="margin-top:8px;">
+                    <span style="font-size:12px;color:#ffd700;font-weight:700;">MONTH REPLAY:</span>
+                    <button class="btn btn-primary" style="font-size:15px;padding:10px 24px;" onclick="monthDemo('2026-08')">AUG 2026</button>
+                    <button class="btn btn-primary" style="font-size:15px;padding:10px 24px;" onclick="monthDemo('2026-09')">SEPT 2026</button>
+                    <button class="btn btn-primary" style="font-size:15px;padding:10px 24px;" onclick="monthDemo('2026-10')">OCT 2026</button>
+                    <span style="font-size:11px;color:#ffffff;" id="monthNote">auto picks finest timeframe with full-month bars (1M only has Oct)</span>
+                </div>
+                <div class="resline" id="rangeInfo"></div>
+                <div class="wallet-strip" id="walletStrip">
+                    <div>
+                        <div class="ws-label">PRACTICE WALLET</div>
+                        <div class="ws-bal" id="wsBal">$567.00</div>
+                    </div>
+                    <div class="ws-mid">
+                        <div class="ws-delta" id="wsDelta">&#9679; press Play to run the trial</div>
+                        <div class="ws-bar"><div class="ws-fill" id="wsFill"></div></div>
+                        <div class="ws-meta" id="wsMeta">replay progress: 0 trades</div>
+                    </div>
+                </div>
+                <div class="wr-hero" id="wrHero">
+                    <div class="wr-big" id="wrBig">--</div>
+                    <div style="flex:1;">
+                        <div class="wr-lab">WIN RATE <span class="wr-mode">LIVE-COST SIM &mdash; spread charged &middot; GIVE on</span></div>
+                        <div class="wr-sub" id="wrSub">press Play to run the backtest replay</div>
+                        <div class="wr-note">every fill pays the live spread (Spread pts input) &middot; exit-engine matches live (ON) &middot; 3-layer ladder + 300s TTL modelled &mdash; still no slippage/commission</div>
+                    </div>
+                </div>
+                <div class="statsline" id="simStats" style="margin-top:6px;">$500 &middot; +$0 &middot; 0/0 trades &middot; WR 0% &middot; PF 0 &middot; DD 0% &middot; SL 0</div>
+                <div class="resline" id="bankLine" style="margin-top:4px;"></div>
+                <div class="resline" id="earnLine" style="margin-top:4px;"></div>
+                <div class="pm-row">
+                    <svg id="simMeter" class="pm-svg" viewBox="0 0 240 136" aria-label="strategy back-test profit meter"></svg>
+                    <div class="pm-caption" id="simMeterCaption">strategy back-test <b>profit meter</b>: red walk loses from start, green walk profits &middot; needle = net P&amp;L</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Trade Log <span class="sub">simulated replay, most recent first</span></h3>
+                <div class="trade-list" id="tradeList"></div>
+            </div>
+
+            <div class="card">
+                <h3>Loss Autopsy <span class="sub">what killed the money, so entries change with evidence</span></h3>
+                <div class="resline" id="autopsyBody">press Play to run the backtest replay</div>
+            </div>
+
+        </div>
+    </div>
+
+            <div class="card">
+                <h3>Live M2 Ticker <span class="sub">MT4 has no M2 chart - built live from ticks (file history for context)</span></h3>
+                <div style="display:flex;gap:18px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px;">
+                    <div id="tickPrice" style="font-size:42px;font-weight:800;font-family:Consolas,monospace;">--</div>
+                    <div id="tickMeta" style="font-family:Consolas,monospace;font-size:12px;color:#8b93a7;"></div>
+                </div>
+                <canvas id="tickChart" style="width:100%;height:220px;display:block;"></canvas>
+            </div>
+
+    <div class="card" id="vsMt5Card">
+        <h3>VS LIVE ACCOUNT <span class="sub">what to watch when the Play numbers meet the broker</span></h3>
+        <div class="vs-grid">
+            <div class="vs-live" id="vsLive">polling live account...</div>
+            <ul class="vs-watch">
+                <li><b>Spread toll:</b> XAUUSD 34 pts &asymp; <span class="hl">$0.34 per 0.01 lot + commission</span> &mdash; the Play chart charges $0, so every sim win shrinks live (dream WR 90% &rarr; real 12-28% historically).</li>
+                <li><b>Extra gates live only:</b> the bot also runs ADX&ge;13, whip-breaker (2 losses &rarr; 45min off), breakout-15, learner veto, cost-aware ladder (TTL 300s) &mdash; it takes FAR fewer trades than Play shows.</li>
+                <li><b>Sizing:</b> live lots = risk &divide; (ATR stop &times; 100), capped at base&times;10 = <b>0.10</b> and <b id="vsSlots">1</b> slot &mdash; Play compounds equity instead.</li>
+                <li><b>Stops:</b> broker SL = wick-proof disaster <b>1.5&times;ATR</b> from entry (not the sim's soft exit) &mdash; wicks can tag it before TP.</li>
+                <li><b>Profit guard:</b> live stops everything at baseline + $100 &mdash; and the baseline <span class="hl">auto-rebases on every restart</span> to the current balance (fresh $500 after the HFM account switch). Play has no guard.</li>
+                <li><b>Instrument:</b> HFM MT4 lists <b>XAUUSD</b> (2-digit pricing, point 0.01, IOC filling) &mdash; quote/thin-hour gaps differ from the replay bars.</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Bot Console <span class="sub">the running bot&rsquo;s own log, streamed</span>
+            <span id="botStateBadge" class="chip idle">STATE: ?</span></h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <div id="botNow" class="mono-line" style="flex:1;min-height:0;"><span style="color:#ffffff;">NOW:</span> waiting for first cycle...</div>
+            <span class="chip idle" data-f="all"     onclick="setTermFilter('all')">ALL</span>
+            <span class="chip idle" data-f="trade"   onclick="setTermFilter('trade')">TRADES</span>
+            <span class="chip idle" data-f="gate"    onclick="setTermFilter('gate')">GATES</span>
+            <span class="chip idle" data-f="err"     onclick="setTermFilter('err')">ERRORS</span>
+        </div>
+        <div id="botConsole"></div>
+        <div id="consoleState" class="resline">connecting...</div>
+    </div>
+
+</div>
+
+<script>document.write('<script src="xau_eur_history.js?v=' + Date.now() + '"><\/script>');</script>
+<script>document.write('<script src="xauusd_history.js?v=' + Date.now() + '"><\/script>');</script>
+<script>
+const TF_LABELS = { '1min':'1M', '2min':'2M', '3min':'3M', '5min':'5M', '15min':'15M', '30min':'30M', '1hour':'1H', '4hour':'4H', 'daily':'D' };
+// ---- FIXED DEFAULTS: every refresh starts here (the measured-best settings) ----
+const DEFAULTS = { tf: '1min', emaFast: 5, emaSlow: 27, atrStop: 1, rrRatio: 5,
+    riskPct: 5, maxConcurrent: 3, baseLots: 0.45, wickProof: true, disasterMult: 1.5, profitTarget: 100,
+    spreadPts: 34, exitEngine: true, givePeak: 2, giveKeepPct: 30, squeezeOn: false, squeezePct: 70, goalBalance: '', floorBalance: 400, crossOn: true, alignOn: false, fadeOn: false, reloadOn: false, fadeSpike: 2, fadeN: 20, vwapOn: false, vwapKEntry: 2, vwapKStop: 3, lw1: 50, lw2: 30, lw3: 20, sineOn: false, fibOn: false, fibN: 50, beatOn: false, tightTP: false, maxHold: 0, roundOn: false, fomoOn: false, fomoN: 4 };
+
+let currentSpeedProfile = DEFAULTS.tf;
+let allTrades = [];
+let priceCandles = [];
+let currentTradeIndex = 0;
+let isPlaying = false;
+let playbackSpeed = 2;
+let animationId = null;
+let chartType = 'candlestick';
+let chartCanvas, chartCtx;
+let runningPositions = 0;
+let currentSeed = 'random';
+let seededRandom = null;
+let dataSource = 'synthetic';
+let masterCandles = [];
+const CHART_WINDOW = 150;
+let viewEnd = null;
+let viewFollow = true;
+let lastCandleW = 0;
+let currentSymbol = 'eur';
+function setDataSource(sym) {
+    currentSymbol = sym === 'usd' ? 'usd' : 'eur';
+    const btnE = document.getElementById('btnDataEur');
+    const btnU = document.getElementById('btnDataUsd');
+    if (btnE) btnE.classList.toggle('active', currentSymbol === 'eur');
+    if (btnU) btnU.classList.toggle('active', currentSymbol === 'usd');
+    const ct = document.getElementById('cockpitTitle');
+    if (ct) ct.textContent = (currentSymbol === 'usd' ? 'XAUUSD' : 'XAUEUR') + ' COCKPIT';
+    regenerate();
+}
+
+function seedRandom(seed) {
+    let s = typeof seed === 'string' ? seed.split('').reduce((a,c) => a + c.charCodeAt(0), 0) : seed;
+    return function() {
+        s = (s * 9301 + 49297) % 233280;
+        return s / 233280;
+    };
+}
+
+function getSeed() {
+    currentSeed = Math.floor(Math.random() * 1000000);
+    seededRandom = seedRandom(currentSeed);
+    return seededRandom;
+}
+
+function regenerate() {
+    getSeed();
+    generateCandles(seededRandom);
+    applyRange();
+}
+
+function updateDataBadge() {
+    const badge = document.getElementById('dataBadge');
+    const title = document.getElementById('chartTitle');
+    if (dataSource === 'real') {
+        const first = priceCandles[0], last = priceCandles[priceCandles.length - 1];
+        badge.className = 'data-badge real';
+        badge.textContent = 'REAL BARS - ' + priceCandles.length + ' bars';
+        const h = currentSymbol === 'usd' ? window.XAUUSD_HISTORY : window.XAUEUR_HISTORY;
+        badge.title = (currentSymbol === 'usd' ? 'xauusd_history.js' : 'xau_eur_history.js') + ' exported ' + ((h && h.updated) || '?')
+            + ' | last bar ' + fmtKLDate(last.t) + ' (KL)';
+        title.textContent = (currentSymbol === 'usd' ? 'XAU/USD' : 'XAU/EUR') + ' ' + TF_LABELS[currentSpeedProfile]
+            + '  ' + fmtKLDate(first.t)
+            + ' -> ' + fmtKLDate(last.t);
+    } else {
+        badge.className = 'data-badge synth';
+        badge.textContent = 'NO DATA - run python export_history.py';
+        title.textContent = (currentSymbol === 'usd' ? 'XAU/USD' : 'XAU/EUR') + ' - no bars loaded';
+    }
+}
+
+// ---- self-built charts: aggregate 1min bars into any N-min timeframe ----
+// RESAMPLE_SRC maps a virtual TF to [source TF, factor]. OHLC-correct
+// (open=first, high/low=extremes, close=last), epoch-aligned so bars match
+// what the broker would print. Proved byte-identical vs file 2min section.
+const RESAMPLE_SRC = { '3min': ['1min', 3] };
+function aggregateTF(raw, factor) {
+    const step = 60 * factor;
+    let s = 0;
+    while (s < raw.length && (raw[s][0] % step) !== 0) s++;
+    const out = [];
+    for (let i = s; i + factor - 1 < raw.length; i += factor) {
+        let h = -Infinity, l = Infinity;
+        for (let m = i; m < i + factor; m++) {
+            if (raw[m][2] > h) h = raw[m][2];
+            if (raw[m][3] < l) l = raw[m][3];
+        }
+        out.push([raw[i][0], raw[i][1], h, l, raw[i + factor - 1][4]]);
+    }
+    return out;
+}
+
+function getRealCandles() {
+    const h = currentSymbol === 'usd' ? window.XAUUSD_HISTORY : window.XAUEUR_HISTORY;
+    if (!h || !h.timeframes) return null;
+    let bars = h.timeframes[currentSpeedProfile];
+    if (!bars && RESAMPLE_SRC[currentSpeedProfile]) {
+        const src = RESAMPLE_SRC[currentSpeedProfile][0], f = RESAMPLE_SRC[currentSpeedProfile][1];
+        const raw = h.timeframes[src];
+        if (raw && raw.length >= 60 * f) bars = aggregateTF(raw, f);
+    }
+    if (!bars || bars.length < 60) return null;
+    return bars.map(b => ({ t: b[0], o: b[1], h: b[2], l: b[3], c: b[4] }));
+}
+
+function generateCandles(rng) {
+    const real = getRealCandles();
+    if (real) {
+        masterCandles = real;
+        dataSource = 'real';
+    } else {
+        dataSource = 'synthetic';
+        masterCandles = [];
+        let price = 2350;
+        let trend = 0;
+        let vol = 1.5;
+        const totalCandles = 800;
+        for (let i = 0; i < totalCandles; i++) {
+            if (rng() < 0.02) trend = (rng() - 0.5) * 0.3;
+            if (rng() < 0.01) vol = 0.5 + rng() * 2;
+            const ret = trend + (rng() - 0.5) * vol;
+            const open = price;
+            price = Math.max(1800, Math.min(3500, price * (1 + ret / 100)));
+            const close = price;
+            const range = Math.abs(close - open) + rng() * vol * 0.3;
+            const high = Math.max(open, close) + range * rng();
+            const low = Math.min(open, close) - range * rng();
+            masterCandles.push({ t: 1735689600 + i * 3600, o: open, h: high, l: low, c: close });
+        }
+    }
+}
+
+function selectSpeed(profile) {
+    currentSpeedProfile = profile;
+    document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector('[data-speed="' + profile + '"]');
+    if (btn) btn.classList.add('active');
+    // a new timeframe = a new history span: drop the old date slice
+    document.getElementById('rangeFrom').value = '';
+    document.getElementById('rangeTo').value = '';
+regenerate();
+updatePractice();
+// auto-run the practice trial: the wallet strip + gauge walk the balance
+// forward trade-by-trade as soon as the backtest is loaded
+setTimeout(() => {
+    const closed = (allTrades || []).filter(t => t.status === 'closed');
+    if (!isPlaying && closed.length > 1
+            && currentTradeIndex < closed.length - 1) {
+        isPlaying = true;
+        const b = document.getElementById('btnPlay');
+        if (b) b.textContent = 'Pause';
+        animate();
+    }
+}, 900);
+
+}
+
+// ---------- training range (compact) ----------
+function toInputValue(t) {
+    return new Date((t + klShift()) * 1000).toISOString().slice(0, 16);
+}
+
+function parseRangeInput(id) {
+    const v = document.getElementById(id).value;
+    if (!v) return null;
+    const ms = Date.parse(v + 'Z');
+    return isNaN(ms) ? null : Math.round(ms / 1000) - klShift();
+}
+
+function applyRange() {
+    let fromT = parseRangeInput('rangeFrom');
+    let toT = parseRangeInput('rangeTo');
+    let note = '';
+    if (fromT != null && toT != null && fromT > toT) {
+        const tmp = fromT; fromT = toT; toT = tmp;
+        document.getElementById('rangeFrom').value = toInputValue(fromT);
+        document.getElementById('rangeTo').value = toInputValue(toT);
+        note = 'swapped. ';
+    }
+    if (fromT == null && toT == null) {
+        priceCandles = masterCandles.slice();
+    } else {
+        const sliced = sliceRange(masterCandles, fromT, toT);
+        priceCandles = sliced.length ? sliced : masterCandles.slice();
+        if (!sliced.length) note += 'no bars in range - all data. ';
+    }
+    generateTrades();
+    viewEnd = null;
+    viewFollow = true;
+    updateDataBadge();
+    updateViewButtons();
+    updateRangeInfo(note);
+    resetReplay();
+}
+
+function clearRange() {
+    document.getElementById('rangeFrom').value = '';
+    document.getElementById('rangeTo').value = '';
+    applyRange();
+}
+
+function updateRangeInfo(note) {
+    const el = document.getElementById('rangeInfo');
+    if (!el) return;
+    if (!priceCandles.length) { el.textContent = 'No data loaded.'; return; }
+    const pct = masterCandles.length ? (priceCandles.length / masterCandles.length * 100).toFixed(0) : '0';
+    el.textContent = (note || '') + priceCandles.length + '/' + masterCandles.length + ' bars ('
+        + pct + '%) ' + fmtKLFull(priceCandles[0].t) + ' -> ' + fmtKLFull(priceCandles[priceCandles.length - 1].t) + ' KL';
+}
+
+function fmtKLFull(t) {
+    const d = new Date((t + klShift()) * 1000);
+    const hh = String(d.getUTCHours()).padStart(2, '0');
+    const mm = String(d.getUTCMinutes()).padStart(2, '0');
+    return String(d.getUTCDate()).padStart(2, '0') + ' ' + KL_MON[d.getUTCMonth()] + ' '
+        + d.getUTCFullYear() + ' ' + hh + ':' + mm;
+}
+
+function fmtKLShort(t) {
+    const d = new Date((t + klShift()) * 1000);
+    const hh = String(d.getUTCHours()).padStart(2, '0');
+    const mm = String(d.getUTCMinutes()).padStart(2, '0');
+    return String(d.getUTCDate()).padStart(2, '0') + ' ' + KL_MON[d.getUTCMonth()] + ' ' + hh + ':' + mm;
+}
+
+function fmtDur(sec) {
+    sec = Math.max(0, Math.round(sec));
+    const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+    if (d > 0) return d + 'd ' + h + 'h';
+    if (h > 0) return h + 'h ' + m + 'm';
+    if (m > 0) return m + 'm';
+    return sec + 's';
+}
+
+// ---------- pure backtest engine ----------
+function emaArr(values, period) {
+    const k = 2 / (period + 1);
+    const out = new Array(values.length).fill(null);
+    let prev = null;
+    for (let i = 0; i < values.length; i++) {
+        if (i < period - 1) continue;
+        if (prev === null) {
+            let s = 0;
+            for (let j = 0; j < period; j++) s += values[j];
+            prev = s / period;
+        } else {
+            prev = values[i] * k + prev * (1 - k);
+        }
+        out[i] = prev;
+    }
+    return out;
+}
+
+function atrArr(candles, period) {
+    const out = new Array(candles.length).fill(null);
+    let prev = null, seed = 0;
+    for (let i = 1; i < candles.length; i++) {
+        const c = candles[i], p = candles[i - 1];
+        const tr = Math.max(c.h - c.l, Math.abs(c.h - p.c), Math.abs(c.l - p.c));
+        if (i <= period) {
+            seed += tr;
+            if (i === period) { prev = seed / period; out[i] = prev; }
+        } else {
+            prev = (prev * (period - 1) + tr) / period;
+            out[i] = prev;
+        }
+    }
+    return out;
+}
+
+// EMA over an array with leading nulls (MACD line): seeds at the first
+// valid bar so warmup stays honest. No lookahead.
+function emaValid(values, period) {
+    const out = new Array(values.length).fill(null);
+    let start = 0;
+    while (start < values.length && values[start] == null) start++;
+    if (start >= values.length) return out;
+    const sub = emaArr(values.slice(start), period);
+    for (let i = 0; i < sub.length; i++) out[start + i] = sub[i];
+    return out;
+}
+
+// MACD line/signal/hist. No lookahead.
+function macdArr(closes, fast, slow, sigP) {
+    const f = emaArr(closes, fast), s = emaArr(closes, slow);
+    const line = closes.map((_, i) => (f[i] == null || s[i] == null) ? null : f[i] - s[i]);
+    const sig = emaValid(line, sigP);
+    const hist = line.map((v, i) => (v == null || sig[i] == null) ? null : v - sig[i]);
+    return { line, sig, hist };
+}
+
+// Slow Stochastic %K/%D (TV SlowStoch style): SMA-smoothed, null till warmed.
+function stochArr(candles, n, kSm, dSm) {
+    const len = candles.length;
+    const raw = new Array(len).fill(null);
+    for (let i = n - 1; i < len; i++) {
+        let hh = -Infinity, ll = Infinity;
+        for (let m = i - n + 1; m <= i; m++) {
+            if (candles[m].h > hh) hh = candles[m].h;
+            if (candles[m].l < ll) ll = candles[m].l;
+        }
+        const rng = hh - ll;
+        raw[i] = rng > 0 ? 100 * (candles[i].c - ll) / rng : 50;
+    }
+    const K = new Array(len).fill(null), D = new Array(len).fill(null);
+    for (let i = n - 1 + kSm - 1; i < len; i++) {
+        let sum = 0, ok = true;
+        for (let m = i - kSm + 1; m <= i; m++) { if (raw[m] == null) { ok = false; break; } sum += raw[m]; }
+        if (ok) K[i] = sum / kSm;
+    }
+    for (let i = n - 1 + kSm - 1 + dSm - 1; i < len; i++) {
+        let sum = 0, ok = true;
+        for (let m = i - dSm + 1; m <= i; m++) { if (K[m] == null) { ok = false; break; } sum += K[m]; }
+        if (ok) D[i] = sum / dSm;
+    }
+    return { K, D };
+}
+
+// Least-squares sine fit (live sine-ride port): close = A*cos(wt)+B*sin(wt)+C
+// over integer periods 4..45 min; returns {w, off, period, r2} of best R2.
+// Single-pass R2 via SSres = Syy - A*SxyA - B*SxyB - C*Sy. No lookahead.
+function fitSine(ts, cs) {
+    const n = ts.length;
+    let mean = 0;
+    for (const v of cs) mean += v;
+    mean /= n;
+    let sst = 0;
+    for (const v of cs) sst += (v - mean) * (v - mean);
+    if (!(sst > 0)) return null;
+    let best = null;
+    for (let P = 4; P <= 45; P += 1) {
+        const w = 2 * Math.PI / (P * 60);
+        let scc = 0, sss = 0, scs = 0, sc1 = 0, ss1 = 0, scy = 0, ssy = 0, sy = 0, syy = 0;
+        for (let k = 0; k < n; k++) {
+            const co = Math.cos(w * ts[k]), si = Math.sin(w * ts[k]), y = cs[k];
+            scc += co * co; sss += si * si; scs += co * si; sc1 += co; ss1 += si;
+            scy += co * y; ssy += si * y; sy += y; syy += y * y;
+        }
+        const s1 = n;
+        const det = scc * (sss * s1 - ss1 * ss1) - scs * (scs * s1 - ss1 * sc1) + sc1 * (scs * ss1 - sss * sc1);
+        if (Math.abs(det) < 1e-12) continue;
+        const A = (scy * (sss * s1 - ss1 * ss1) - scs * (ssy * s1 - ss1 * sy) + sc1 * (ssy * ss1 - sss * sy)) / det;
+        const B = (scc * (ssy * s1 - ss1 * sy) - scy * (scs * s1 - ss1 * sc1) + sc1 * (scs * sy - ssy * sc1)) / det;
+        const C = (scc * (sss * sy - ssy * ss1) - scs * (scs * sy - ssy * sc1) + scy * (scs * ss1 - sss * sc1)) / det;
+        const r2 = 1 - (syy - A * scy - B * ssy - C * sy) / sst;
+        if (best === null || r2 > best.r2) best = { w, off: Math.atan2(-B, A), period: P, r2 };
+    }
+    return best;
+}
+
+// Wilder ADX(14): the classic "is there a trend AT ALL" number.
+// < threshold = no directional move worth trading = permission denied.
+function adxArr(candles, period) {
+    const n = candles.length;
+    const out = new Array(n).fill(null);
+    let trS = 0, pdmS = 0, ndmS = 0, dxS = 0, cnt = 0;
+    let ph = null, pl = null, pc = null;
+    for (let i = 0; i < n; i++) {
+        const c = candles[i];
+        if (i === 0) { ph = c.h; pl = c.l; pc = c.c; continue; }
+        const up = c.h - ph, dn = pl - c.l;
+        const pdm = (up > dn && up > 0) ? up : 0;
+        const ndm = (dn > up && dn > 0) ? dn : 0;
+        const tr = Math.max(c.h - c.l, Math.abs(c.h - pc), Math.abs(c.l - pc));
+        ph = c.h; pl = c.l; pc = c.c;
+        if (i <= period) {
+            trS += tr; pdmS += pdm; ndmS += ndm;
+        } else {
+            trS = trS - trS / period + tr;
+            pdmS = pdmS - pdmS / period + pdm;
+            ndmS = ndmS - ndmS / period + ndm;
+        }
+        if (i >= period) {
+            const pdi = trS > 0 ? 100 * pdmS / trS : 0;
+            const ndi = trS > 0 ? 100 * ndmS / trS : 0;
+            const dx = (pdi + ndi) > 0 ? 100 * Math.abs(pdi - ndi) / (pdi + ndi) : 0;
+            cnt++;
+            if (cnt <= period) {
+                dxS += dx;
+                if (cnt === period) out[i] = dxS / period;
+            } else {
+                dxS = dxS - dxS / period + dx;
+                out[i] = dxS / period;
+            }
+        }
+    }
+    return out;
+}
+
+function sliceRange(candles, fromT, toT) {
+    return candles.filter(c => (fromT == null || c.t >= fromT) && (toT == null || c.t <= toT));
+}
+
+function simulateTrades(candles, p) {
+    const closes = candles.map(c => c.c);
+    const ef = emaArr(closes, p.emaFast);
+    const es = emaArr(closes, p.emaSlow);
+    const atr = atrArr(candles, 14);
+    // ---- BALL/COIL detector (fomorian chop): ATR14 compressed vs ATR50
+    // means the tape coiled into an oval - breakouts from inside the
+    // ball get faded by the crowd, so block entries while coiled.
+    const atr50 = emaArr(atr.map(v => v == null ? 0 : v), 50);
+    const macd = macdArr(closes, 5, 28, 5);
+    const stoch = stochArr(candles, 14, 3, 3);
+    // Session VWAP + stdev bands (user VWAP Stdev concept). Session = UTC
+    // day (broker-day proxy); no volume in data so VWAP = rolling mean of
+    // typical price, sigma = rolling stdev. Bands expand through the day
+    // as sigma accumulates - exactly like the chart. No lookahead.
+    const vwap = new Array(candles.length).fill(null);
+    const vsig = new Array(candles.length).fill(null);
+    const vsessN = new Array(candles.length).fill(0);
+    {
+        let dayStart = -1, sumTP = 0, sumTP2 = 0, vn = 0;
+        for (let i = 0; i < candles.length; i++) {
+            const day = Math.floor(candles[i].t / 86400);
+            if (day !== dayStart) { dayStart = day; sumTP = 0; sumTP2 = 0; vn = 0; }
+            const tp = (candles[i].h + candles[i].l + candles[i].c) / 3;
+            vn++; sumTP += tp; sumTP2 += tp * tp;
+            if (vn >= 2) {
+                const mean = sumTP / vn;
+                vwap[i] = mean;
+                vsig[i] = Math.sqrt(Math.max(0, sumTP2 / vn - mean * mean));
+                vsessN[i] = vn;
+            }
+        }
+    }
+    const warmup = Math.max(p.emaFast, p.emaSlow, 14) + 1;
+
+    // ---- REGIME GATE: answers "should I trade AT ALL right now?" ----
+    // direction-blind: blocks EVERY entry while the market state says chop.
+    const regimeOn = !!(p.regimeMode && p.regimeMode !== 'off');
+    const adxE = regimeOn && p.regimeMode === 'adx' ? adxArr(candles, 14) : null;
+    const regimeOk = i => {
+        if (!regimeOn) return true;
+        const th = p.regimeThr;
+        if (p.regimeMode === 'adx') return adxE[i] == null ? true : adxE[i] >= th;
+        return true;
+    };
+
+    // whip-breaker + gate-permission counters (fresh state every run)
+    let whipCount = 0, pauseUntil = -1, sigTotal = 0, gateBlocked = 0;
+    const closed = [];
+    const opens = [];
+    const pendings = [];   // live limit-ladder orders awaiting fill (TTL 300s)
+    let cancelled = 0;       // parked layers that TTL-expired unfilled
+    let numSig = 0;
+    let cycleNo = 1;             // journey cycles: bank the goal, restart at $500
+    const banked = [];
+    // heartbeat (sine-ride) fit state
+    let beatW = null, beatOff = 0, beatT0 = 0, beatPeriod = 10, beatR2 = 0;
+    let beatZone = null, beatSetBal = null, beatLastForce = -1e12, beatBrakeUntil = 0, beatFitBar = -1000;
+    const spreadPx = (p.spreadPts || 0) * 0.01;   // XAUUSD point 0.01 -> 34 pts = $0.34
+    const r2 = x => Math.round(x * 100 - 1e-9) / 100;   // py-style: round(0.045,2)=0.04
+    // broker-realistic sizing shared by cross layers and fade singles:
+    // risk-sized, max 100 lots, never above 1:500 margin affordability
+    const lotsFor = (bal, entry, slDist, riskAmt) => {
+        const marginAff = Math.floor((bal * 500 / (100 * entry)) * 100) / 100;
+        return Math.min(100, Math.max(marginAff, 0.01),
+            Math.max(0.01, p.baseLots, Math.floor((riskAmt / (slDist * 100)) * 100) / 100));
+    };
+    // GIVE knobs: wake at $ peak, exit when less than keep% of it remains
+    // (live exit-engine: min_peak $2, retrace 70% == keep 30%)
+    const givePeak = Math.max(0.5, (p.givePeak == null ? 2 : p.givePeak));
+    const giveKeep = Math.min(0.95, Math.max(0.05, (p.giveKeepPct == null ? 30 : p.giveKeepPct) / 100));
+    let balance = p.startBalance;
+    let peak = balance;
+    let maxDD = 0;
+    let num = 0;
+
+    const closeTrade = (t, exitPrice, reason, barIdx) => {
+        const move = t.direction === 'LONG' ? exitPrice - t.entryPrice : t.entryPrice - exitPrice;
+        const pnl = move * t.lots * 100;
+        balance += pnl;
+        t.exitPrice = exitPrice;
+        t.pnl = pnl;
+        t.pnlPct = t.entryBalance > 0 ? (pnl / t.entryBalance) * 100 : 0;
+        t.exitBalance = balance;
+        t.status = 'closed';
+        t.isWin = pnl > 0;
+        t.reason = reason;
+        t.exitTime = candles[barIdx].t;
+        peak = Math.max(peak, balance);
+        maxDD = Math.max(maxDD, peak > 0 ? ((peak - balance) / peak) * 100 : 0);
+        closed.push(t);
+        if (pnl < 0) whipCount++; else whipCount = 0;
+    };
+
+    // a SIGNAL counts as active while any of its layers is open or pending
+    const activeSigs = () => {
+        const s = new Set();
+        for (const o of opens) s.add(o.sigId);
+        for (const pd of pendings) s.add(pd.sigId);
+        return s.size;
+    };
+
+    for (let i = warmup; i < candles.length; i++) {
+        const c = candles[i];
+        const crossUp = ef[i] != null && es[i] != null && ef[i - 1] != null && es[i - 1] != null
+            && ef[i] > es[i] && ef[i - 1] <= es[i - 1];
+        const crossDn = ef[i] != null && es[i] != null && ef[i - 1] != null && es[i - 1] != null
+            && ef[i] < es[i] && ef[i - 1] >= es[i - 1];
+        // EMA-cross entries double as the exit-channel signals
+        const inUp = crossUp, inDn = crossDn, exUp = crossUp, exDn = crossDn;
+        // HORN-FADE signal (anti-FOMO): a wick piercing the N-bar extreme
+        // by spike$ that closes back off it = crowd stop-hunt. Faded with
+        // a LIMIT below/above - the entry is never chased at market.
+        let fadeDir = null, fadeLevel = 0;
+        if (p.fadeOn && i > (p.fadeN || 20) && atr[i]) {
+            let hh = -Infinity, ll = Infinity;
+            for (let m = i - (p.fadeN || 20); m < i; m++) {
+                if (candles[m].h > hh) hh = candles[m].h;
+                if (candles[m].l < ll) ll = candles[m].l;
+            }
+            const sp = p.fadeSpike || 2;
+            if (c.l <= ll - sp && (Math.min(c.o, c.c) - c.l) >= sp && c.c > c.l + sp) {
+                fadeDir = 'LONG'; fadeLevel = c.l + 0.1 * atr[i];
+            } else if (c.h >= hh + sp && (c.h - Math.max(c.o, c.c)) >= sp && c.c < c.h - sp) {
+                fadeDir = 'SHORT'; fadeLevel = c.h - 0.1 * atr[i];
+            }
+        }
+        // ALIGN signal (user MACD x Stoch mixture): SlowStoch %K crosses
+        // %D from the extreme + MACD line/signal agree + hist sliding the
+        // same way + candle agrees. All four lines, one direction.
+        let alignDir = null;
+        if (p.alignOn && stoch.K[i - 1] != null && stoch.D[i - 1] != null &&
+            stoch.K[i] != null && stoch.D[i] != null &&
+            macd.line[i] != null && macd.sig[i] != null &&
+            macd.hist[i] != null && macd.hist[i - 1] != null) {
+            const kUp = stoch.K[i - 1] <= stoch.D[i - 1] && stoch.K[i] > stoch.D[i] &&
+                Math.min(stoch.K[i - 1], stoch.K[i]) < 30;
+            const kDn = stoch.K[i - 1] >= stoch.D[i - 1] && stoch.K[i] < stoch.D[i] &&
+                Math.max(stoch.K[i - 1], stoch.K[i]) > 70;
+            const mUp = macd.line[i] > macd.sig[i] && macd.hist[i] > macd.hist[i - 1];
+            const mDn = macd.line[i] < macd.sig[i] && macd.hist[i] < macd.hist[i - 1];
+            if (kUp && mUp && c.c > c.o) alignDir = 'LONG';
+            else if (kDn && mDn && c.c < c.o) alignDir = 'SHORT';
+        }
+        // VWAP band touch: pierce the entry band, close back inside = fade
+        // toward the VWAP magnet (one price point to the next). Bands need
+        // morning energy first: 30+ bars into the day AND sigma at least
+        // a quarter ATR, else micro-bands fire into a spread bigger
+        // than their stop.
+        let vwapDir = null, vwapLevel = 0;
+        if (p.vwapOn && vwap[i] != null && vsig[i] > 0 && atr[i] &&
+            vsessN[i] >= 30 && vsig[i] >= 0.25 * atr[i]) {
+            const kE = Math.max(0.5, p.vwapKEntry || 2);
+            const dnE = vwap[i] - kE * vsig[i], upE = vwap[i] + kE * vsig[i];
+            if (c.l <= dnE && c.c > dnE) { vwapDir = 'LONG'; vwapLevel = dnE; }
+            else if (c.h >= upE && c.c < upE) { vwapDir = 'SHORT'; vwapLevel = upE; }
+        }
+        // SINE phase sensing (user pattern engine, sim-only test): alternating
+        // pivots with similar amplitude + even spacing = heartbeat wave.
+        // Enter at the turn (trough-up / crest-down), TP the opposite
+        // extreme (full wave ride). Slow timeframes (15M+) get a wider
+        // lookback - their beats breathe slower in clock time.
+        let sineDir = null, sineLevel = 0, sineTP = 0, sineSL = 0;
+        if (p.sineOn && i > 12 && atr[i]) {
+            const slowTF = p.tfName === '15min' || p.tfName === '30min' || p.tfName === '1hour' || p.tfName === '4hour' || p.tfName === 'daily';
+            const K = 2, LB = slowTF ? 20 : 10, SPANMAX = slowTF ? 18 : 9;
+            const CVMAX = slowTF ? 0.5 : 0.35, TURNWIN = slowTF ? 6 : 4;
+            const piv = [];
+            for (let m = i - LB; m <= i - K; m++) {
+                let isH = true, isL = true;
+                for (let q = m - K; q <= m + K; q++) {
+                    if (q === m || q < 0 || q > i) continue;
+                    if (candles[q].h >= candles[m].h) isH = false;
+                    if (candles[q].l <= candles[m].l) isL = false;
+                    if (!isH && !isL) break;
+                }
+                if (isH) piv.push({ m, t: 1, p: candles[m].h });
+                if (isL) piv.push({ m: m, t: -1, p: candles[m].l });
+            }
+            piv.sort((a, b) => a.m - b.m);
+            let alt = piv.length >= 4;
+            const amps = [], spans = [];
+            for (let q = 1; q < piv.length && alt; q++) {
+                if (piv[q].t === piv[q - 1].t) alt = false;
+                else { amps.push(Math.abs(piv[q].p - piv[q - 1].p)); spans.push(piv[q].m - piv[q - 1].m); }
+            }
+            if (alt && amps.length) {
+                const meanA = amps.reduce((a, b) => a + b, 0) / amps.length;
+                let sd = 0;
+                for (const a of amps) sd += (a - meanA) * (a - meanA);
+                sd = Math.sqrt(sd / amps.length);
+                const cv = meanA > 0 ? sd / meanA : 9;
+                const spanOk = spans.every(s2 => s2 >= 2 && s2 <= SPANMAX);
+                const last = piv[piv.length - 1], prevP = piv[piv.length - 2];
+                if (cv <= CVMAX && spanOk && meanA >= 0.5 * atr[i] && (i - last.m) <= TURNWIN) {
+                    if (last.t === 1 && c.c <= last.p - 0.10 * meanA) {
+                        sineDir = 'SHORT'; sineLevel = last.p - 0.1 * atr[i];
+                        sineTP = prevP.p; sineSL = last.p + 1.0 * atr[i];
+                    } else if (last.t === -1 && c.c >= last.p + 0.10 * meanA) {
+                        sineDir = 'LONG'; sineLevel = last.p + 0.1 * atr[i];
+                        sineTP = prevP.p; sineSL = last.p - 1.0 * atr[i];
+                    }
+                }
+            }
+        }
+        // FIB 61.8% retrace fades (sim-only test): N-bar swing, fade the
+        // golden-pocket touch that closes back, SL past 78.6%, TP 38.2%.
+        let fibDir = null, fibLevel = 0, fibSL = 0, fibTP = 0;
+        if (p.fibOn && i > (p.fibN || 50) && atr[i]) {
+            const N = p.fibN || 50;
+            let hh = -Infinity, ll = Infinity, hi = -1, li = -1;
+            for (let m = i - N; m < i; m++) {
+                if (candles[m].h > hh) { hh = candles[m].h; hi = m; }
+                if (candles[m].l < ll) { ll = candles[m].l; li = m; }
+            }
+            const rng = hh - ll;
+            if (rng > 0) {
+                if (hi > li) {
+                    const eL = hh - 0.618 * rng, sL = hh - 0.786 * rng, tL = hh - 0.382 * rng;
+                    if (c.l <= eL && c.c > eL) { fibDir = 'LONG'; fibLevel = eL; fibSL = sL; fibTP = tL; }
+                } else {
+                    const eS = ll + 0.618 * rng, sS = ll + 0.786 * rng, tS = ll + 0.382 * rng;
+                    if (c.h >= eS && c.c < eS) { fibDir = 'SHORT'; fibLevel = eS; fibSL = sS; fibTP = tS; }
+                }
+            }
+        }
+        // ROUND-NUMBER fades (sim-only test): $25 grid lines are where big
+        // changes occur (stops cluster, FOMO chases). Bar pierces the level
+        // and closes back = fade it with a limit at the line.
+        let roundDir = null, roundLevel = 0;
+        if (p.roundOn && atr[i]) {
+            const kL = Math.round(c.l / 25) * 25, kH = Math.round(c.h / 25) * 25;
+            if (c.l <= kL && c.c > kL) { roundDir = 'LONG'; roundLevel = kL; }
+            else if (c.h >= kH && c.c < kH) { roundDir = 'SHORT'; roundLevel = kH; }
+        }
+        // FOMO-exhaustion fades (sim-only test): K consecutive same-direction
+        // closes = crowd piled in / martingalers averaged down. Fade the
+        // exhaustion with a limit at the run extreme (their liquidation
+        // becomes the reversal fuel).
+        let fomoDir = null, fomoLevel = 0;
+        if (p.fomoOn && i > (p.fomoN || 4) && atr[i]) {
+            const K = p.fomoN || 4;
+            let up = 0, dn = 0, xh = -Infinity, xl = Infinity;
+            for (let m = i - K + 1; m <= i; m++) {
+                if (candles[m].c > candles[m].o) up++; else if (candles[m].c < candles[m].o) dn++;
+                if (candles[m].h > xh) xh = candles[m].h;
+                if (candles[m].l < xl) xl = candles[m].l;
+            }
+            if (up === K) { fomoDir = 'SHORT'; fomoLevel = xh; }
+            else if (dn === K) { fomoDir = 'LONG'; fomoLevel = xl; }
+        }
+
+        for (let k = opens.length - 1; k >= 0; k--) {
+            const t = opens[k];
+            // unrealized NOW vs peak from bar EXTREMES (live samples intra-bar)
+            const flNow = (t.direction === 'LONG' ? c.c - t.entryPrice : t.entryPrice - c.c) * t.lots * 100;
+            const flHi = (t.direction === 'LONG' ? c.h - t.entryPrice : t.entryPrice - c.l) * t.lots * 100;
+            t.pk = Math.max(t.pk || 0, flHi);
+            // TP-TIGHTEN port (live exit-engine rule): once per position, park
+            // TP just beyond the recent extreme + 0.12 ATR - only ever closer
+            // (tick-bounds skipped, bar granularity).
+            if (p.tightTP && !t.tpTightened && i >= 2 && atr[i] > 0) {
+                const ext = t.direction === 'LONG'
+                    ? Math.max(candles[i - 1].h, candles[i - 2].h)
+                    : Math.min(candles[i - 1].l, candles[i - 2].l);
+                const off = 0.12 * atr[i];
+                const gap = Math.max(0.15, 0.05 * atr[i]);
+                if (t.direction === 'LONG') {
+                    const cand = ext + off;
+                    if (!t.tp || cand < t.tp - gap) { t.tp = cand; t.tpTightened = true; }
+                } else {
+                    const cand = ext - off;
+                    if (!t.tp || cand > t.tp + gap) { t.tp = cand; t.tpTightened = true; }
+                }
+            }
+            const tpHit = t.direction === 'LONG' ? c.h >= t.tp : c.l <= t.tp;
+            const hardHit = t.direction === 'LONG' ? c.l <= t.hard : c.h >= t.hard;
+            const closeBeyond = t.direction === 'LONG' ? c.c <= t.sl : c.c >= t.sl;
+            const touchSl = t.direction === 'LONG' ? c.l <= t.sl : c.h >= t.sl;
+            let exitPx = null, reason = '';
+            // UNDERWATER TIME-STOP (anti-bleed): a position still red after
+            // maxHoldBars closes flat at market instead of waiting to gap
+            // into the disaster stop. Targets the #1 autopsy killer.
+            if (p.maxHold > 0 && (i - t.candleIdx) >= p.maxHold && flNow < 0) {
+                exitPx = c.c; reason = 'TIME';
+            }
+            // HEARTBEAT accel-flip (sine rides only): a powerful 5-bar shove
+            // against the ride = close NOW at market (reason ACCEL-FLIP).
+            // The next sine turn re-enters opposite and completes the beat -
+            // this is the "shoot past somemore" moment turned into the
+            // next ride instead of a liquidation.
+            if (t.kind === 'sine' && atr[i] && i >= 5 && candles[i - 5]) {
+                const mom5 = (c.c - candles[i - 5].c) / atr[i];
+                if ((t.direction === 'LONG' && mom5 < -1.2) || (t.direction === 'SHORT' && mom5 > 1.2)) {
+                    exitPx = c.c; reason = 'ACCEL-FLIP';
+                }
+            }
+            // CLOSE BEFORE THE NEGATIVE: once peak >= givePeak $, exit AT
+            // the keep%-of-peak threshold price the moment floating falls
+            // to it - this automates the discipline fomorian lack: take the
+            // money instead of anchoring to the highest tick they saw.
+            // (mirrors the live exit-engine chop-out; live config has it
+            // ON - only runs when the Exit-Engine box is checked)
+            if (exitPx !== null) { /* ACCEL-FLIP holds - close now */ }
+            else if (p.exitEngine && t.pk >= givePeak && flNow <= giveKeep * t.pk) {
+                const thrPx = t.direction === 'LONG'
+                    ? t.entryPrice + (giveKeep * t.pk) / (t.lots * 100)
+                    : t.entryPrice - (giveKeep * t.pk) / (t.lots * 100);
+                exitPx = (thrPx >= c.l && thrPx <= c.h) ? thrPx : c.o;
+                reason = 'GIVE';
+            }
+            else if (hardHit) { exitPx = t.hard; reason = 'SL-hard'; }
+            else if (tpHit) { exitPx = t.tp; reason = 'TP'; }
+            else if ((t.direction === 'LONG' && exDn) || (t.direction === 'SHORT' && exUp)) {
+                exitPx = c.c; reason = 'Reverse';
+            } else if (p.wickProof && closeBeyond) { exitPx = c.c; reason = 'SL'; }
+            else if (!p.wickProof && touchSl) { exitPx = t.sl; reason = 'SL'; }
+            if (exitPx !== null) {
+                closeTrade(t, exitPx, reason, i);
+                opens.splice(k, 1);
+                // SECOND-CHANCE reload (user psychology engine): banked early
+                // -> park ONE limit back at the banked entry with the SAME tp.
+                // Price almost always revisits; miss inside 300s = walk away.
+                if (p.reloadOn && reason === 'GIVE') {
+                    const sigIdR = ++numSig;
+                    const fillR = t.entryPrice + (t.direction === 'LONG' ? spreadPx : -spreadPx);
+                    pendings.push({ sigId: sigIdR, direction: t.direction, level: t.entryPrice, createdT: c.t, createdIdx: i, pos: {
+                        sigId: sigIdR, direction: t.direction, entryPrice: fillR, kind: 'reload',
+                        exitPrice: null, exitBalance: null,
+                        lots: t.lots,
+                        pnl: 0, pnlPct: 0, status: 'open', isWin: false,
+                        sl: t.sl, hard: t.hard, tp: t.tp,
+                        riskAmount: t.riskAmount, pk: 0, reason: ''
+                    } });
+                }
+            }
+        }
+
+        // ---- limit-ladder fills: live parks pullback layers (300s TTL on 1M
+        // = 5 bars). TTL is counted in BARS so slower timeframes get the
+        // same 5-bar patience instead of expiring inside one bar.
+        for (let k = pendings.length - 1; k >= 0; k--) {
+            const pd = pendings[k];
+            const ttlGone = (pd.createdIdx != null && i - pd.createdIdx > 5) || (pd.createdIdx == null && (c.t - pd.createdT) > 300);
+            if (ttlGone) { pendings.splice(k, 1); cancelled++; continue; }
+            const hit = pd.direction === 'LONG' ? c.l <= pd.level : c.h >= pd.level;
+            if (!hit) continue;
+            pendings.splice(k, 1);
+            num++;
+            opens.push(Object.assign(pd.pos, { num: num, candleIdx: i, entryTime: c.t, entryBalance: balance, cycle: cycleNo, spreadPaid: pd.pos.lots * 100 * spreadPx }));
+        }
+
+        if (balance <= 0) { balance = 0; break; }
+
+        // WHIPSAW BREAKER: N consecutive losing closes -> stay out for
+        // M bars. Kills flip-chop clusters (LONG loss -> SHORT loss -> ...).
+        if (p.whipBreak && whipCount >= (p.whipN || 3)) {
+            pauseUntil = i + (p.whipBars || 30);
+            whipCount = 0;
+        }
+        const dir = inUp ? 'LONG' : inDn ? 'SHORT' : null;
+        let gatePass = false;
+        // squeeze-ball block: coiled tape (ATR14 < pct of ATR50) means
+        // the crowd is about to get chopped inside the oval - no entry
+        const coiled = p.squeezeOn && atr[i] != null && atr50[i] != null && atr50[i] > 0 &&
+            atr[i] < (p.squeezePct / 100) * atr50[i];
+        if (dir) {
+            sigTotal++;
+            gatePass = i >= pauseUntil && regimeOk(i) && !coiled;
+            if (!gatePass) gateBlocked++;
+        }
+        if (p.crossOn && gatePass && activeSigs() < p.maxConcurrent && balance > 0 && balance < p.targetBalance && balance >= p.floorBal && atr[i]) {
+            const entry = c.c;
+            const slDist = atr[i] * p.atrStop;
+            const riskAmt = balance * (p.riskPct / 100);
+            const totalLots = lotsFor(balance, entry, slDist, riskAmt);
+            // LIVE 3-LAYER LIMIT LADDER (limit_ladder: weights .5/.3/.2,
+            // step 0.2 ATR pullback, TTL 300s). Layer0 = at-market (fills
+            // now), layers 1-2 park better and fill only if price trades
+            // back. Each fill = its own position with sl/tp from its own
+            // fill + spread - mirrors live tickets (.04/.03/.02 = .09).
+            const sigId = ++numSig;
+            const wsum = (p.lw1 || 50) + (p.lw2 || 30) + (p.lw3 || 20);
+            const l1 = Math.max(0.01, r2((p.lw1 || 50) / wsum * totalLots));
+            const l2 = Math.max(0.01, r2((p.lw2 || 30) / wsum * totalLots));
+            const l3 = Math.max(0.01, r2(totalLots - l1 - l2));
+            const stepAtr = (p.ladderStep || 0.2) * atr[i];
+            for (let k = 0; k < 3; k++) {
+                const level = dir === 'LONG' ? entry - k * stepAtr : entry + k * stepAtr;
+                const fill = level + (dir === 'LONG' ? spreadPx : -spreadPx);
+                const pos = {
+                    sigId: sigId, direction: dir, entryPrice: fill, kind: 'cross',
+                    exitPrice: null, exitBalance: null,
+                    lots: [l1, l2, l3][k],
+                    pnl: 0, pnlPct: 0, status: 'open', isWin: false,
+                    sl: dir === 'LONG' ? fill - slDist : fill + slDist,
+                    hard: dir === 'LONG' ? fill - slDist * (p.disasterMult || 1) : fill + slDist * (p.disasterMult || 1),
+                    tp: dir === 'LONG' ? fill + slDist * p.rrRatio : fill - slDist * p.rrRatio,
+                    riskAmount: riskAmt, pk: 0, reason: ''
+                };
+                if (k === 0) {
+                    num++;
+                    opens.push(Object.assign(pos, { num: num, candleIdx: i, entryTime: c.t, entryBalance: balance, cycle: cycleNo, spreadPaid: pos.lots * 100 * spreadPx }));
+                } else {
+                    pendings.push({ sigId: sigId, direction: dir, level: level, createdT: c.t, pos: pos });
+                }
+            }
+        }
+
+        // ALIGN entries (sim-only test): same gates, slots, sizing, ladder
+        // and exits as cross - kind 'align' so the autopsy scores the
+        // entry family separately.
+        if (alignDir && activeSigs() < p.maxConcurrent && balance > 0 && balance < p.targetBalance && balance >= p.floorBal && atr[i]) {
+            sigTotal++;
+            if (i < pauseUntil || !regimeOk(i) || coiled) { gateBlocked++; }
+            else {
+                const entryA = c.c;
+                const slDistA = atr[i] * p.atrStop;
+                const riskAmtA = balance * (p.riskPct / 100);
+                const totalLotsA = lotsFor(balance, entryA, slDistA, riskAmtA);
+                const sigIdA = ++numSig;
+                const l1A = Math.max(0.01, r2(0.5 * totalLotsA));
+                const l2A = Math.max(0.01, r2(0.3 * totalLotsA));
+                const l3A = Math.max(0.01, r2(totalLotsA - l1A - l2A));
+                const stepAtrA = 0.2 * atr[i];
+                for (let ka = 0; ka < 3; ka++) {
+                    const levelA = alignDir === 'LONG' ? entryA - ka * stepAtrA : entryA + ka * stepAtrA;
+                    const fillA = levelA + (alignDir === 'LONG' ? spreadPx : -spreadPx);
+                    const posA = {
+                        sigId: sigIdA, direction: alignDir, entryPrice: fillA, kind: 'align',
+                        exitPrice: null, exitBalance: null,
+                        lots: [l1A, l2A, l3A][ka],
+                        pnl: 0, pnlPct: 0, status: 'open', isWin: false,
+                        sl: alignDir === 'LONG' ? fillA - slDistA : fillA + slDistA,
+                        hard: alignDir === 'LONG' ? fillA - slDistA * (p.disasterMult || 1) : fillA + slDistA * (p.disasterMult || 1),
+                        tp: alignDir === 'LONG' ? fillA + slDistA * p.rrRatio : fillA - slDistA * p.rrRatio,
+                        riskAmount: riskAmtA, pk: 0, reason: ''
+                    };
+                    if (ka === 0) {
+                        num++;
+                        opens.push(Object.assign(posA, { num: num, candleIdx: i, entryTime: c.t, entryBalance: balance, cycle: cycleNo, spreadPaid: posA.lots * 100 * spreadPx }));
+                    } else {
+                        pendings.push({ sigId: sigIdA, direction: alignDir, level: levelA, createdT: c.t, pos: posA });
+                    }
+                }
+            }
+        }
+
+        // VWAP band-fades (sim-only test): fade the outer band, TP the VWAP
+        // magnet - one price point to the next, small by construction.
+        // Same gates, slots, sizing, TTL and exits as every family.
+        if (vwapDir && activeSigs() < p.maxConcurrent && balance > 0 && balance < p.targetBalance && balance >= p.floorBal && atr[i] && vsig[i] > 0) {
+            sigTotal++;
+            if (i < pauseUntil || !regimeOk(i) || coiled) { gateBlocked++; }
+            else {
+                const slV = vwapDir === 'LONG' ? vwap[i] - (p.vwapKStop || 3) * vsig[i] : vwap[i] + (p.vwapKStop || 3) * vsig[i];
+                const tpV = vwap[i];
+                const fillV = vwapLevel + (vwapDir === 'LONG' ? spreadPx : -spreadPx);
+                const slDistV = Math.abs(fillV - slV);
+                if (slDistV > 0) {
+                    const riskAmtV = balance * (p.riskPct / 100);
+                    const lotsV = Math.max(0.01, r2(lotsFor(balance, vwapLevel, slDistV, riskAmtV)));
+                    const sigIdV = ++numSig;
+                    num++;
+                    pendings.push({ sigId: sigIdV, direction: vwapDir, level: vwapLevel, createdT: c.t, createdIdx: i, pos: {
+                        sigId: sigIdV, direction: vwapDir, entryPrice: fillV, kind: 'vwap',
+                        exitPrice: null, exitBalance: null,
+                        lots: lotsV,
+                        pnl: 0, pnlPct: 0, status: 'open', isWin: false,
+                        sl: slV,
+                        hard: vwapDir === 'LONG' ? fillV - slDistV * (p.disasterMult || 1) : fillV + slDistV * (p.disasterMult || 1),
+                        tp: tpV,
+                        riskAmount: riskAmtV, pk: 0, reason: ''
+                    } });
+                }
+            }
+        }
+
+        // SINE phase rides (sim-only test): limit at the turn extreme,
+        // TP the opposite extreme (full wave). Same gates/slots/TTL.
+        if (sineDir && activeSigs() < p.maxConcurrent && balance > 0 && balance < p.targetBalance && balance >= p.floorBal && atr[i]) {
+            sigTotal++;
+            if (i < pauseUntil || !regimeOk(i) || coiled) { gateBlocked++; }
+            else {
+                const fillS = sineLevel + (sineDir === 'LONG' ? spreadPx : -spreadPx);
+                const slDistS = Math.abs(fillS - sineSL);
+                if (slDistS > 0) {
+                    const riskAmtS = balance * (p.riskPct / 100);
+                    const lotsS = Math.max(0.01, r2(lotsFor(balance, sineLevel, slDistS, riskAmtS)));
+                    const sigIdS = ++numSig;
+                    num++;
+                    pendings.push({ sigId: sigIdS, direction: sineDir, level: sineLevel, createdT: c.t, createdIdx: i, pos: {
+                        sigId: sigIdS, direction: sineDir, entryPrice: fillS, kind: 'sine',
+                        exitPrice: null, exitBalance: null,
+                        lots: lotsS,
+                        pnl: 0, pnlPct: 0, status: 'open', isWin: false,
+                        sl: sineSL,
+                        hard: sineDir === 'LONG' ? fillS - slDistS * (p.disasterMult || 1) : fillS + slDistS * (p.disasterMult || 1),
+                        tp: sineTP,
+                        riskAmount: riskAmtS, pk: 0, reason: ''
+                    } });
+                }
+            }
+        }
+
+        // FIB golden-pocket rides (sim-only test): limit at 61.8%, TP 38.2%.
+        if (fibDir && activeSigs() < p.maxConcurrent && balance > 0 && balance < p.targetBalance && balance >= p.floorBal && atr[i]) {
+            sigTotal++;
+            if (i < pauseUntil || !regimeOk(i) || coiled) { gateBlocked++; }
+            else {
+                const fillF = fibLevel + (fibDir === 'LONG' ? spreadPx : -spreadPx);
+                const slDistF = Math.abs(fillF - fibSL);
+                if (slDistF > 0) {
+                    const riskAmtF = balance * (p.riskPct / 100);
+                    const lotsF = Math.max(0.01, r2(lotsFor(balance, fibLevel, slDistF, riskAmtF)));
+                    const sigIdF = ++numSig;
+                    num++;
+                    pendings.push({ sigId: sigIdF, direction: fibDir, level: fibLevel, createdT: c.t, createdIdx: i, pos: {
+                        sigId: sigIdF, direction: fibDir, entryPrice: fillF, kind: 'fib',
+                        exitPrice: null, exitBalance: null,
+                        lots: lotsF,
+                        pnl: 0, pnlPct: 0, status: 'open', isWin: false,
+                        sl: fibSL,
+                        hard: fibDir === 'LONG' ? fillF - slDistF * (p.disasterMult || 1) : fillF + slDistF * (p.disasterMult || 1),
+                        tp: fibTP,
+                        riskAmount: riskAmtF, pk: 0, reason: ''
+                    } });
+                }
+            }
+        }
+
+        // HEARTBEAT forced trades (sine-ride port, sim-only test): least-
+        // squares sine fit (periods 4..45 min, step 1, 200-bar window,
+        // refit every 10 bars - live uses 0.5-step/300w/60s) sets the wave;
+        // LONG in the low zone, SHORT in the high, once per wave period;
+        // garbage fit (R2<0.15) falls back to a scalp every 900s; a wave
+        // losing >$25 skips the next force. Forced doctrine: no chop-gate,
+        // but respects slots, floor, goal and brake. Chop SL 0.6 / TP 0.5.
+        if (p.beatOn && atr[i]) {
+            if (beatW === null || (i - beatFitBar) >= 10) {
+                const W = Math.min(200, i);
+                if (W >= 60) {
+                    const ts = [], cs = [];
+                    for (let m = i - W + 1; m <= i; m++) { ts.push(candles[m].t - candles[i - W + 1].t); cs.push(candles[m].c); }
+                    const fit = fitSine(ts, cs);
+                    if (fit) { beatW = fit.w; beatOff = fit.off; beatT0 = candles[i - W + 1].t; beatPeriod = fit.period; beatR2 = fit.r2; }
+                    beatFitBar = i;
+                }
+            }
+            if (beatW !== null) {
+                let ph = (beatW * (c.t - beatT0) + beatOff) % (2 * Math.PI);
+                if (ph < 0) ph += 2 * Math.PI;
+                const zone = (Math.PI / 2 < ph && ph < 3 * Math.PI / 2) ? 'low' : 'high';
+                if (beatZone !== null && zone !== beatZone) {
+                    if (beatSetBal !== null) {
+                        const dp = balance - beatSetBal;
+                        if (dp < -25) beatBrakeUntil = i + Math.max(4, Math.round(beatPeriod));
+                    }
+                    beatSetBal = balance;
+                }
+                if (beatSetBal === null) beatSetBal = balance;
+                beatZone = zone;
+                // bar-counted cadence (live M1-equivalent: 60s bars made the
+                // seconds version identical; bars stay sane on H1/H4/D).
+                const perB = Math.min(45, Math.max(4, Math.round(beatPeriod)));
+                const waveOk = beatR2 >= 0.15;
+                const due = waveOk ? (i - beatLastForce) >= perB : (i - beatLastForce) >= 15;
+                if (i >= beatBrakeUntil && due && activeSigs() < p.maxConcurrent && balance > 0 && balance < p.targetBalance && balance >= p.floorBal) {
+                    const bDir = zone === 'low' ? 'LONG' : 'SHORT';
+                    const bEntry = c.c;
+                    const bSlD = atr[i] * 0.6;
+                    const bRisk = balance * (p.riskPct / 100);
+                    const bLots = Math.max(0.01, r2(lotsFor(balance, bEntry, bSlD, bRisk)));
+                    const bFill = bEntry + (bDir === 'LONG' ? spreadPx : -spreadPx);
+                    const sigIdB = ++numSig;
+                    num++;
+                    opens.push({ sigId: sigIdB, direction: bDir, entryPrice: bFill, kind: 'beat',
+                        num: num, candleIdx: i, entryTime: c.t, entryBalance: balance, cycle: cycleNo,
+                        spreadPaid: bLots * 100 * spreadPx,
+                        exitPrice: null, exitBalance: null, lots: bLots,
+                        pnl: 0, pnlPct: 0, status: 'open', isWin: false,
+                        sl: bDir === 'LONG' ? bFill - bSlD : bFill + bSlD,
+                        hard: bDir === 'LONG' ? bFill - bSlD * (p.disasterMult || 1) : bFill + bSlD * (p.disasterMult || 1),
+                        tp: bDir === 'LONG' ? bFill + 0.5 * atr[i] : bFill - 0.5 * atr[i],
+                        riskAmount: bRisk, pk: 0, reason: '' });
+                    beatLastForce = i;
+                }
+            }
+        }
+
+        // ROUND-NUMBER fades (sim-only test): limit AT the $25 line,
+        // stop a quarter-ATR beyond (the hunt overruns), TP normal RR.
+        if (roundDir && activeSigs() < p.maxConcurrent && balance > 0 && balance < p.targetBalance && balance >= p.floorBal && atr[i]) {
+            sigTotal++;
+            if (i < pauseUntil || !regimeOk(i) || coiled) { gateBlocked++; }
+            else {
+                const slDistR = atr[i] * p.atrStop;
+                const riskAmtR = balance * (p.riskPct / 100);
+                const lotsR = Math.max(0.01, r2(lotsFor(balance, roundLevel, slDistR, riskAmtR)));
+                const fillR = roundLevel + (roundDir === 'LONG' ? spreadPx : -spreadPx);
+                const sigIdR = ++numSig;
+                num++;
+                pendings.push({ sigId: sigIdR, direction: roundDir, level: roundLevel, createdT: c.t, pos: {
+                    sigId: sigIdR, direction: roundDir, entryPrice: fillR, kind: 'round',
+                    exitPrice: null, exitBalance: null,
+                    lots: lotsR,
+                    pnl: 0, pnlPct: 0, status: 'open', isWin: false,
+                    sl: roundDir === 'LONG' ? fillR - slDistR : fillR + slDistR,
+                    hard: roundDir === 'LONG' ? fillR - slDistR * (p.disasterMult || 1) : fillR + slDistR * (p.disasterMult || 1),
+                    tp: roundDir === 'LONG' ? fillR + slDistR * p.rrRatio : fillR - slDistR * p.rrRatio,
+                    riskAmount: riskAmtR, pk: 0, reason: ''
+                } });
+            }
+        }
+
+        // FOMO-exhaustion fades (sim-only test): limit at the run extreme,
+        // normal bracket. Crowd fuel becomes reversal fuel - or not.
+        if (fomoDir && activeSigs() < p.maxConcurrent && balance > 0 && balance < p.targetBalance && balance >= p.floorBal && atr[i]) {
+            sigTotal++;
+            if (i < pauseUntil || !regimeOk(i) || coiled) { gateBlocked++; }
+            else {
+                const slDistF = atr[i] * p.atrStop;
+                const riskAmtF = balance * (p.riskPct / 100);
+                const lotsF = Math.max(0.01, r2(lotsFor(balance, fomoLevel, slDistF, riskAmtF)));
+                const fillF = fomoLevel + (fomoDir === 'LONG' ? spreadPx : -spreadPx);
+                const sigIdF = ++numSig;
+                num++;
+                pendings.push({ sigId: sigIdF, direction: fomoDir, level: fomoLevel, createdT: c.t, pos: {
+                    sigId: sigIdF, direction: fomoDir, entryPrice: fillF, kind: 'fomo',
+                    exitPrice: null, exitBalance: null,
+                    lots: lotsF,
+                    pnl: 0, pnlPct: 0, status: 'open', isWin: false,
+                    sl: fomoDir === 'LONG' ? fillF - slDistF : fillF + slDistF,
+                    hard: fomoDir === 'LONG' ? fillF - slDistF * (p.disasterMult || 1) : fillF + slDistF * (p.disasterMult || 1),
+                    tp: fomoDir === 'LONG' ? fillF + slDistF * p.rrRatio : fillF - slDistF * p.rrRatio,
+                    riskAmount: riskAmtF, pk: 0, reason: ''
+                } });
+            }
+        }
+
+        // HORN-FADE entries (sim-only test): same gates, slots, sizing and
+        // exits as cross signals - but ONE limit order, never a chase layer.
+        // Unfilled inside 300s = TTL cancel, no trade, no FOMO.
+        if (fadeDir && activeSigs() < p.maxConcurrent && balance > 0 && balance < p.targetBalance && balance >= p.floorBal && atr[i]) {
+            sigTotal++;
+            if (i < pauseUntil || !regimeOk(i) || coiled) { gateBlocked++; }
+            else {
+                const slDistF = atr[i] * p.atrStop;
+                const riskAmtF = balance * (p.riskPct / 100);
+                const lotsF = Math.max(0.01, r2(lotsFor(balance, fadeLevel, slDistF, riskAmtF)));
+                const fillF = fadeLevel + (fadeDir === 'LONG' ? spreadPx : -spreadPx);
+                const sigIdF = ++numSig;
+                num++;
+                pendings.push({ sigId: sigIdF, direction: fadeDir, level: fadeLevel, createdT: c.t, createdIdx: i, pos: {
+                    sigId: sigIdF, direction: fadeDir, entryPrice: fillF, kind: 'fade',
+                    exitPrice: null, exitBalance: null,
+                    lots: lotsF,
+                    spreadPaid: lotsF * 100 * spreadPx,
+                    pnl: 0, pnlPct: 0, status: 'open', isWin: false,
+                    sl: fadeDir === 'LONG' ? fillF - slDistF : fillF + slDistF,
+                    hard: fadeDir === 'LONG' ? fillF - slDistF * (p.disasterMult || 1) : fillF + slDistF * (p.disasterMult || 1),
+                    tp: fadeDir === 'LONG' ? fillF + slDistF * p.rrRatio : fillF - slDistF * p.rrRatio,
+                    riskAmount: riskAmtF, pk: 0, reason: ''
+                } });
+            }
+        }
+
+        // JOURNEY BANKING: goal hit and flat -> vault the profit, restart
+        // the $500 journey and keep testing the remaining history instead
+        // of idling for years. Balance trigger = banked, realized money.
+        if (balance >= p.targetBalance && opens.length === 0 &&
+            closed.length > (banked.length ? banked[banked.length - 1].trades : 0)) {
+            pendings.length = 0;
+            banked.push({ cycle: cycleNo, bar: i, trades: closed.length, bal: balance });
+            balance = p.startBalance;
+            peak = balance;
+            cycleNo++;
+        }
+    }
+
+    pendings.length = 0;   // TTL'd away with the data - no phantom fills
+    const lastIdx = candles.length - 1;
+    while (opens.length > 0) {
+        const t = opens.pop();
+        closeTrade(t, candles[lastIdx].c, 'EOD', lastIdx);
+    }
+
+    return { closed: closed, finalBalance: balance, maxDD: maxDD, peak: peak,
+        gate: { sig: sigTotal, blocked: gateBlocked }, banked: banked, cancelled: cancelled };
+}
+
+function readSimParams() {
+    const gv = (id, fb) => {
+        const el = document.getElementById(id);
+        return el ? el.value : fb;
+    };
+    const gc = id => {
+        const el = document.getElementById(id);
+        return !!(el && el.checked);
+    };
+    return {
+        tfName: (typeof currentSpeedProfile !== 'undefined' ? currentSpeedProfile : '1min'),
+        emaFast: parseInt(gv('emaFast', '9'), 10) || 9,
+        emaSlow: parseInt(gv('emaSlow', '21'), 10) || 21,
+        atrStop: parseFloat(gv('atrStop', '2')) || 2,
+        rrRatio: parseFloat(gv('rrRatio', '2')) || 2,
+        riskPct: parseFloat(gv('riskPct', '2')) || 2,
+        baseLots: parseFloat(gv('baseLots', '0.01')) || 0.01,
+        maxConcurrent: parseInt(gv('maxConcurrent', '1'), 10) || 1,
+        startBalance: parseFloat(gv('startBalance', '500')) || 500,
+        targetBalance: (() => { const g = parseFloat(gv('goalBalance', '2000')); return isNaN(g) ? Infinity : Math.max(500, g); })(),
+        floorBal: (() => { const f = parseFloat(gv('floorBalance', '400')); return isNaN(f) ? 0 : Math.max(0, f); })(),
+        tightTP: gc('tightTP'),
+        maxHold: Math.max(0, parseInt(gv('maxHold', '0'), 10) || 0),
+        wickProof: gc('wickProof'),
+        disasterMult: parseFloat(gv('disasterMult', '1.5')) || 1.5,
+        regimeMode: 'adx',
+        regimeThr: 13,
+        whipBreak: true,
+        whipN: 2,
+        whipBars: 45,
+        spreadPts: Math.max(0, parseFloat(gv('spreadPts', '34')) || 0),
+        exitEngine: gc('exitEngine'),
+        givePeak: Math.max(0.5, parseFloat(gv('givePeak', '2')) || 2),
+        giveKeepPct: Math.min(95, Math.max(5, parseFloat(gv('giveKeepPct', '30')) || 30)),
+        squeezeOn: gc('squeezeOn'),
+        squeezePct: Math.min(95, Math.max(10, parseFloat(gv('squeezePct', '70')) || 70)),
+        crossOn: gc('crossOn'),
+        alignOn: gc('alignOn'),
+        fadeOn: gc('fadeOn'),
+        reloadOn: gc('reloadOn'),
+        fadeSpike: Math.max(0.5, parseFloat(gv('fadeSpike', '2')) || 2),
+        fadeN: Math.min(200, Math.max(5, parseInt(gv('fadeN', '20'), 10) || 20)),
+        sineOn: gc('sineOn'),
+        fibOn: gc('fibOn'),
+        fibN: Math.min(200, Math.max(10, parseInt(gv('fibN', '50'), 10) || 50)),
+        beatOn: gc('beatOn'),
+        roundOn: gc('roundOn'),
+        fomoOn: gc('fomoOn'),
+        fomoN: Math.min(12, Math.max(2, parseInt(gv('fomoN', '4'), 10) || 4)),
+        vwapOn: gc('vwapOn'),
+        vwapKEntry: Math.min(5, Math.max(0.5, parseFloat(gv('vwapKEntry', '2')) || 2)),
+        vwapKStop: Math.min(6, Math.max(1, parseFloat(gv('vwapKStop', '3')) || 3)),
+        lw1: Math.min(100, Math.max(0, parseFloat(gv('lw1', '50')) || 50)),
+        lw2: Math.min(100, Math.max(0, parseFloat(gv('lw2', '30')) || 30)),
+        lw3: Math.min(100, Math.max(0, parseFloat(gv('lw3', '20')) || 20))
+    };
+}
+
+function generateTrades() {
+    const p = readSimParams();
+    const res = simulateTrades(priceCandles, p);
+    allTrades = res.closed;
+    window._lastBanked = res.banked;
+    window._lastCancels = res.cancelled;
+    runningPositions = 0;
+    window._lastMaxDD = res.maxDD;
+    window._lastPeakBalance = res.peak;
+    window._lastGate = res.gate;
+    simStatsText();
+}
+
+// big WIN-RATE hero updater (Play result, front and center)
+function wrSet(big, sub) {
+    const b = document.getElementById('wrBig');
+    const s = document.getElementById('wrSub');
+    if (b) {
+        b.textContent = big;
+        const v = parseFloat(big);
+        b.className = 'wr-big' + (isNaN(v) ? '' : (v >= 60 ? ' good' : (v < 45 ? ' bad' : '')));
+    }
+    if (s) s.textContent = sub || '';
+}
+
+function simStatsText() {
+    const el = document.getElementById('simStats');
+    if (!el) return;
+    const closedTrades = allTrades.filter(t => t.status === 'closed');
+    const startBalance = parseFloat(document.getElementById('startBalance').value) || 500;
+    if (!closedTrades.length) {
+        el.innerHTML = '$' + startBalance.toFixed(0) + ' &middot; no trades - widen EMA spread or check data';
+        wrSet('--', 'no closed trades yet - press Play to run the backtest replay');
+        simMeterGauge();
+        renderAutopsy();
+        renderEarnGrab();
+        return;
+    }
+    const wins = closedTrades.filter(t => t.isWin);
+    const grossW = closedTrades.reduce((a, t) => t.pnl > 0 ? a + t.pnl : a, 0);
+    const grossL = closedTrades.reduce((a, t) => t.pnl < 0 ? a + Math.abs(t.pnl) : a, 0);
+    const pf = grossL > 0 ? (grossW / grossL).toFixed(2) : 'INF';
+    const bal = closedTrades[closedTrades.length - 1].exitBalance;
+    const pnl = bal - startBalance;
+    // expectancy: profit per dollar actually risked (fills x stop distance).
+    // immune to caps, compounding and risk% - THE strategy-quality number.
+    let risked = 0;
+    for (const t of closedTrades) risked += t.lots * Math.abs(t.entryPrice - t.sl) * 100;
+    const expR = risked > 0 ? pnl / risked : 0;
+    const sls = closedTrades.filter(t => t.reason === 'SL').length;
+    const span = closedTrades[closedTrades.length - 1].exitTime - closedTrades[0].entryTime;
+    const days = Math.max(0.02, span / 86400);
+    el.innerHTML = 'bal <b>$' + (+bal).toFixed(0) + '</b> &middot; pnl <b>' + (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(0)
+        + '</b> &middot; ' + closedTrades.length + ' trades (~' + Math.round(closedTrades.length / days) + '/day)'
+        + ' &middot; WR ' + (wins.length / closedTrades.length * 100).toFixed(1)
+        + '% &middot; PF ' + pf + ' &middot; DD ' + (window._lastMaxDD || 0).toFixed(1) + '% &middot; SL ' + sls
+        + ' &middot; span ' + fmtDur(span) + ' &middot; exp ' + (expR >= 0 ? '+' : '') + expR.toFixed(2) + 'R';
+    const g = window._lastGate;
+    if (g && g.blocked > 0) {
+        el.innerHTML += ' &middot; <b>gate blocked ' + g.blocked + '/' + g.sig
+            + ' signals</b> (chop/squeeze = no permission)';
+    }
+    const bk = window._lastBanked || [];
+    if (bk.length) {
+        const gb = parseFloat(document.getElementById('goalBalance').value) || 2000;
+        el.innerHTML += ' &middot; <b>' + bk.length + 'x banked $' + gb.toFixed(0) + '</b> (journey restarts)';
+    }
+    wrSet((wins.length / closedTrades.length * 100).toFixed(1) + '%',
+        closedTrades.length + ' trades \u00b7 PF ' + pf + ' \u00b7 SL ' + sls
+        + ' \u00b7 DD ' + (window._lastMaxDD || 0).toFixed(1) + '%'
+        + ' \u00b7 ~' + Math.round(closedTrades.length / days) + '/day'
+        + ' \u00b7 bal $' + (+bal).toFixed(0)
+        + (g && g.blocked > 0 ? ' \u00b7 gates blocked ' + g.blocked + '/' + g.sig : ''));
+    simMeterGauge();
+    renderAutopsy();
+    renderEarnGrab();
+}
+
+// ---- PROFIT METER GAUGE (strategy back-tester) ----
+// Needle gauge of the sim walk's net P&L vs the start balance. Left half
+// (red) = losing walk, right half (green) = winning; auto-scales the
+// swing so even small walks show life. Redrawn by simStatsText every run.
+function simMeterGauge(balOverride) {
+    const svg = document.getElementById('simMeter');
+    const cap = document.getElementById('simMeterCaption');
+    if (!svg) return;
+    const startBalance = parseFloat(document.getElementById('startBalance').value) || 500;
+    const closed = (allTrades || []).filter(t => t.status === 'closed');
+    const wins = closed.filter(t => t.isWin).length;
+    const losses = closed.length - wins;
+    let pnl = 0, pct = 0, hasTrades = closed.length > 0;
+    if (hasTrades) {
+        const lastBal = (balOverride != null) ? balOverride
+            : closed[closed.length - 1].exitBalance;
+        pnl = (lastBal == null ? startBalance : lastBal) - startBalance;
+        pct = startBalance > 0 ? (pnl / startBalance) * 100 : 0;
+    }
+    const half = Math.max(10, Math.abs(pct) * 1.2);
+    const f = hasTrades ? Math.max(-1, Math.min(1, pct / half)) : 0;
+    const up = f >= 0;
+    const cx = 120, cy = 106, r = 92;
+    const P = a => {
+        const t = a * Math.PI / 180;
+        return [cx + r * Math.sin(t), cy - r * Math.cos(t)];
+    };
+    const arc = (a0, a1) => {
+        const [x0, y0] = P(a0), [x1, y1] = P(a1);
+        const large = Math.abs(a1 - a0) > 180 ? 1 : 0;
+        const sweep = a1 >= a0 ? 1 : 0;
+        return 'M ' + x0.toFixed(2) + ' ' + y0.toFixed(2)
+            + ' A ' + r + ' ' + r + ' 0 ' + large + ' ' + sweep + ' '
+            + x1.toFixed(2) + ' ' + y1.toFixed(2);
+    };
+    let h = '';
+    h += '<path d="' + arc(-88, 88) + '" fill="none" stroke="#222a40" stroke-width="15" stroke-linecap="round"/>';
+    h += '<path d="' + arc(-88, 0) + '" fill="none" stroke="#ff5c5c33" stroke-width="15" stroke-linecap="round"/>';
+    h += '<path d="' + arc(0, 88) + '" fill="none" stroke="#00ff8833" stroke-width="15" stroke-linecap="round"/>';
+    if (hasTrades && Math.abs(f) > 0.005) {
+        h += '<path d="' + arc(0, f * 90) + '" fill="none" stroke="'
+            + (up ? '#00ff88' : '#ff5c5c')
+            + '" stroke-width="15" stroke-linecap="round" style="filter:drop-shadow(0 0 6px '
+            + (up ? '#00ff8855' : '#ff5c5c55') + ')"/>';
+    }
+    for (const v of [-1, -0.5, 0, 0.5, 1]) {
+        const t = v * 90 * Math.PI / 180;
+        const [tx, ty] = P(v * 90);
+        h += '<line x1="' + tx.toFixed(2) + '" y1="' + ty.toFixed(2)
+            + '" x2="' + (cx + (r - 8) * Math.sin(t)).toFixed(2)
+            + '" y2="' + (cy - (r - 8) * Math.cos(t)).toFixed(2)
+            + '" stroke="#ffffff" stroke-width="1"/>';
+        if (Math.abs(v) < 1) {
+            const raw = v * half;
+            const lbl = v === 0 ? '0'
+                : (Math.abs(raw) >= 1000
+                    ? (raw > 0 ? '+' : '-') + (Math.abs(raw) / 1000).toFixed(1) + 'K%'
+                    : (raw > 0 ? '+' : '') + raw.toFixed(0) + '%');
+            h += '<text x="' + (cx + (r + 18) * Math.sin(t)).toFixed(1)
+                + '" y="' + (cy - (r + 16) * Math.cos(t) + 3).toFixed(1)
+                + '" text-anchor="middle" font-size="11" fill="#ffffff" font-family="Consolas,monospace">'
+                + lbl + '</text>';
+        }
+    }
+    const [ax, ay] = P(f * 90);
+    h += '<line x1="' + cx + '" y1="' + cy + '" x2="' + ax.toFixed(2) + '" y2="' + ay.toFixed(2)
+        + '" stroke="' + (up ? '#00ff88' : '#ff5c5c') + '" stroke-width="3" stroke-linecap="round"/>';
+    h += '<circle cx="' + cx + '" cy="' + cy + '" r="5" fill="#12172a" stroke="'
+        + (up ? '#00ff88' : '#ff5c5c') + '" stroke-width="2"/>';
+    const pnlTxt = hasTrades ? ((pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(2)) : '-$0.00';
+    h += '<text x="' + cx + '" y="121" text-anchor="middle" font-size="13" font-weight="700"'
+        + ' font-family="Consolas,monospace" fill="' + (up ? '#00ff88' : '#ff5c5c') + '">'
+        + pnlTxt + '</text>';
+    h += '<text x="' + cx + '" y="132" text-anchor="middle" font-size="11"'
+        + ' font-family="Consolas,monospace" fill="#ffffff">'
+        + (hasTrades ? (Math.abs(pct) >= 1000
+            ? (pct >= 0 ? '+' : '-') + (Math.abs(pct) / 1000).toFixed(1) + 'K%'
+            : (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%') + ' vs $' + startBalance.toFixed(0)
+                     : 'no trades in this walk') + '</text>';
+    svg.innerHTML = h;
+    if (cap) {
+        cap.innerHTML = hasTrades
+            ? 'strategy back-test <b>profit meter</b>: ' + pnlTxt + ' on ' + closed.length
+                + ' trades &middot; <b style="color:#00ff88;">' + wins + 'W</b> / '
+                + '<b style="color:#ff5c5c;">' + losses + 'L</b> &middot; '
+                + (losses > 0 ? 'PF ' + (wins / losses).toFixed(2) : 'all wins')
+            : 'strategy back-test <b>profit meter</b>: no closed trades yet &middot; widen the EMA spread or load more data';
+    }
+}
+
+function bankTimesText() {
+    const el = document.getElementById('bankLine');
+    if (!el) return;
+    const closedTrades = allTrades.filter(t => t.status === 'closed');
+    const startBalance = parseFloat(document.getElementById('startBalance').value) || 500;
+    if (!closedTrades.length) { el.textContent = ''; return; }
+    let lastBank = startBalance;
+    const marks = [];
+    for (const t of closedTrades) {
+        if (t.exitBalance >= lastBank + 100) {
+            lastBank = lastBank + 100;
+            marks.push({ t: t, bal: lastBank });
+            if (marks.length >= 8) break;
+        }
+    }
+    const t0 = closedTrades[0].entryTime;
+    if (!marks.length) { el.textContent = 'no +$100 vault step reached in this walk'; return; }
+    el.innerHTML = '<span style="color:#ffffff;">WALLET climb:</span> ' + marks.map(m =>
+        '<span style="color:#ffd700;">$' + m.bal + '</span> @ ' + fmtKLShort(m.t.exitTime)
+        + ' (+' + fmtDur(m.t.exitTime - t0) + ' in)'
+    ).join(' &middot; ');
+}
+
+function convertToHeikin(candles) {
+    const ha = [];
+    let prevHA = null;
+    for (let i = 0; i < candles.length; i++) {
+        const c = candles[i];
+        const haClose = (c.o + c.h + c.l + c.c) / 4;
+        const haOpen = i === 0 ? (c.o + c.c) / 2 : (prevHA.o + prevHA.c) / 2;
+        const h = { o: haOpen, h: Math.max(c.h, haOpen, haClose), l: Math.min(c.l, haOpen, haClose), c: haClose };
+        ha.push(h);
+        prevHA = h;
+    }
+    return ha;
+}
+
+function ensureChartCanvas() {
+    if (chartCanvas && chartCtx && chartCanvas.dataset.bound) return;
+    chartCanvas = document.getElementById('priceChart');
+    chartCanvas.width = chartCanvas.parentElement.clientWidth - 24;
+    chartCanvas.height = 300;
+    chartCtx = chartCanvas.getContext('2d');
+    if (chartCanvas.dataset.bound) return;
+    chartCanvas.dataset.bound = '1';
+
+    let dragging = false, dragX0 = 0, dragEnd0 = 0;
+    chartCanvas.addEventListener('pointerdown', e => {
+        if (!priceCandles.length || !lastCandleW || viewEnd == null) return;
+        dragging = true;
+        dragX0 = e.clientX;
+        dragEnd0 = viewEnd;
+        try { chartCanvas.setPointerCapture(e.pointerId); } catch (err) {}
+        chartCanvas.classList.add('grabbing');
+    });
+    chartCanvas.addEventListener('pointermove', e => {
+        if (!dragging) return;
+        const dx = e.clientX - dragX0;
+        if (Math.abs(dx) < 2) return;
+        const minEnd = Math.min(CHART_WINDOW, priceCandles.length) - 1;
+        let ne = dragEnd0 - Math.round(dx / lastCandleW);
+        ne = Math.max(minEnd, Math.min(priceCandles.length - 1, ne));
+        if (ne !== viewEnd) {
+            viewEnd = ne;
+            viewFollow = false;
+            updateViewButtons();
+            drawChart();
+        }
+    });
+    const endDrag = () => {
+        if (!dragging) return;
+        dragging = false;
+        chartCanvas.classList.remove('grabbing');
+    };
+    chartCanvas.addEventListener('pointerup', endDrag);
+    chartCanvas.addEventListener('pointercancel', endDrag);
+}
+
+function updateViewButtons() {
+    const bf = document.getElementById('btnFollow');
+    const bl = document.getElementById('btnLive');
+    if (!bf || !bl) return;
+    bf.classList.toggle('active', viewFollow);
+    bl.classList.toggle('active', !viewFollow && viewEnd != null && viewEnd >= priceCandles.length - 1);
+}
+
+function setViewFollow() { viewFollow = true; updateViewButtons(); drawChart(); }
+function setViewLive() { viewFollow = false; viewEnd = priceCandles.length - 1; updateViewButtons(); drawChart(); }
+
+function klShift() {
+    const h = currentSymbol === 'usd' ? window.XAUUSD_HISTORY : window.XAUEUR_HISTORY;
+    return 8 * 3600 - (h && h.server_offset ? h.server_offset : 0);
+}
+
+const KL_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function fmtKL(t, spanSec) {
+    const d = new Date((t + klShift()) * 1000);
+    const dd = d.getUTCDate(), mo = KL_MON[d.getUTCMonth()], yy = d.getUTCFullYear();
+    const hh = String(d.getUTCHours()).padStart(2, '0');
+    const mm = String(d.getUTCMinutes()).padStart(2, '0');
+    if (spanSec > 180 * 86400) return mo + ' ' + yy;
+    if (spanSec > 14 * 86400) return dd + ' ' + mo;
+    if (spanSec > 86400) return dd + ' ' + mo + ' ' + hh + ':' + mm;
+    return hh + ':' + mm;
+}
+
+function fmtKLDate(t) {
+    return new Date((t + klShift()) * 1000).toISOString().slice(0, 10);
+}
+
+function drawChart() {
+    ensureChartCanvas();
+    chartCtx.fillStyle = '#12172a';
+    chartCtx.fillRect(0, 0, chartCanvas.width, chartCanvas.height);
+
+    const n = priceCandles.length;
+    if (n === 0) return;
+
+    const closedTrades = allTrades.filter(t => t.status === 'closed');
+    const minEnd = Math.min(CHART_WINDOW, n) - 1;
+    const maxEnd = n - 1;
+    if (viewEnd == null) viewEnd = minEnd;
+    if (viewFollow) {
+        const tradeIdx = closedTrades.length > 0
+            ? closedTrades[Math.min(currentTradeIndex, closedTrades.length - 1)].candleIdx
+            : 0;
+        viewEnd = Math.max(minEnd, Math.min(maxEnd, tradeIdx + 30));
+    }
+    viewEnd = Math.max(minEnd, Math.min(maxEnd, viewEnd));
+    const startIdx = Math.max(0, viewEnd - CHART_WINDOW + 1);
+
+    let visibleCandles = priceCandles.slice(startIdx, viewEnd + 1);
+    if (visibleCandles.length === 0) return;
+
+    if (chartType === 'heiken') visibleCandles = convertToHeikin(visibleCandles);
+
+    const padding = { top: 15, right: 50, bottom: 30, left: 5 };
+    const chartW = chartCanvas.width - padding.left - padding.right;
+    const chartH = chartCanvas.height - padding.top - padding.bottom;
+
+    let allHigh = -Infinity, allLow = Infinity;
+    visibleCandles.forEach(c => {
+        allHigh = Math.max(allHigh, c.h);
+        allLow = Math.min(allLow, c.l);
+    });
+    const range = allHigh - allLow;
+    const pad2 = range * 0.05;
+    allHigh += pad2;
+    allLow -= pad2;
+
+    const candleW = chartW / Math.min(CHART_WINDOW, n);
+    lastCandleW = candleW;
+    const bodyW = Math.max(1, candleW * 0.7);
+
+    chartCtx.strokeStyle = '#242a42';
+    chartCtx.lineWidth = 0.5;
+    for (let i = 0; i < 4; i++) {
+        const y = padding.top + (chartH / 3) * i;
+        chartCtx.beginPath();
+        chartCtx.moveTo(padding.left, y);
+        chartCtx.lineTo(padding.left + chartW, y);
+        chartCtx.stroke();
+        const price = allHigh - ((allHigh - allLow) / 3) * i;
+        chartCtx.fillStyle = '#ffffff';
+        chartCtx.font = '11px monospace';
+        chartCtx.textAlign = 'left';
+        chartCtx.fillText(price.toFixed(0), padding.left + chartW + 3, y + 3);
+    }
+
+    visibleCandles.forEach((c, i) => {
+        const x = padding.left + i * candleW + candleW / 2;
+        const yOpen = padding.top + chartH * (1 - (c.o - allLow) / (allHigh - allLow));
+        const yClose = padding.top + chartH * (1 - (c.c - allLow) / (allHigh - allLow));
+        const yHigh = padding.top + chartH * (1 - (c.h - allLow) / (allHigh - allLow));
+        const yLow = padding.top + chartH * (1 - (c.l - allLow) / (allHigh - allLow));
+
+        const isGreen = c.c >= c.o;
+        const color = isGreen ? '#00ff88' : '#ff4444';
+
+        chartCtx.strokeStyle = color;
+        chartCtx.lineWidth = 1;
+        chartCtx.beginPath();
+        chartCtx.moveTo(x, yHigh);
+        chartCtx.lineTo(x, yLow);
+        chartCtx.stroke();
+
+        const bodyTop = Math.min(yOpen, yClose);
+        const bodyHeight = Math.max(1, Math.abs(yClose - yOpen));
+        chartCtx.fillStyle = color;
+        chartCtx.fillRect(x - bodyW / 2, bodyTop, bodyW, bodyHeight);
+    });
+
+    const visibleTrades = closedTrades.slice(0, currentTradeIndex + 1);
+    visibleTrades.forEach(t => {
+        if (t.candleIdx < startIdx || t.candleIdx > viewEnd) return;
+        const x = padding.left + (t.candleIdx - startIdx) * candleW + candleW / 2;
+        const y = padding.top + chartH * (1 - (t.entryPrice - allLow) / (allHigh - allLow));
+
+        chartCtx.fillStyle = t.direction === 'LONG' ? '#00ff88' : '#ff4444';
+        chartCtx.beginPath();
+        if (t.direction === 'LONG') {
+            chartCtx.moveTo(x, y + 6); chartCtx.lineTo(x - 3, y + 11); chartCtx.lineTo(x + 3, y + 11);
+        } else {
+            chartCtx.moveTo(x, y - 6); chartCtx.lineTo(x - 3, y - 11); chartCtx.lineTo(x + 3, y - 11);
+        }
+        chartCtx.closePath();
+        chartCtx.fill();
+    });
+
+    // vault markers: every +$100 cumulative milestone on the sim walk
+    (() => {
+        const startBal = parseFloat(document.getElementById('startBalance').value) || 500;
+        if (!visibleTrades.length) return;
+        let lastBank = startBal, drawn = 0;
+        for (const t of visibleTrades) {
+            if (t.exitBalance !== undefined && t.exitBalance >= lastBank + 100) {
+                lastBank = lastBank + 100;
+                drawn++;
+                if (t.candleIdx > startIdx && drawn <= 8) {
+                    const x = padding.left + (t.candleIdx - startIdx) * candleW + candleW / 2;
+                    const y = padding.top + chartH * (1 - (t.exitBalance - allLow) / (allHigh - allLow));
+                    chartCtx.save();
+                    chartCtx.strokeStyle = '#ffd700';
+                    chartCtx.setLineDash([3, 3]);
+                    chartCtx.lineWidth = 1;
+                    chartCtx.beginPath();
+                    chartCtx.moveTo(padding.left, y);
+                    chartCtx.lineTo(padding.left + chartW, y);
+                    chartCtx.stroke();
+                    chartCtx.setLineDash([]);
+                    chartCtx.fillStyle = '#ffd700';
+                    chartCtx.font = 'bold 11px monospace';
+                    chartCtx.textAlign = 'right';
+                    chartCtx.fillText('BANK' + drawn + ' $' + Math.round(t.exitBalance), padding.left + chartW - 4, y - 4);
+                    chartCtx.restore();
+                }
+            }
+        }
+    })()
+
+    // bottom time axis (Kuala Lumpur, UTC+8)
+    const tickCount = 6;
+    const spanSec = Math.max(1, priceCandles[viewEnd].t - priceCandles[startIdx].t);
+    chartCtx.strokeStyle = '#2c3350';
+    chartCtx.lineWidth = 1;
+    chartCtx.beginPath();
+    chartCtx.moveTo(padding.left, padding.top + chartH);
+    chartCtx.lineTo(padding.left + chartW, padding.top + chartH);
+    chartCtx.stroke();
+    chartCtx.font = '11px monospace';
+    for (let k = 0; k <= tickCount; k++) {
+        const idx = Math.round(startIdx + (viewEnd - startIdx) * k / tickCount);
+        const x = padding.left + (idx - startIdx) * candleW + candleW / 2;
+        if (k > 0 && k < tickCount) {
+            chartCtx.strokeStyle = '#242a42';
+            chartCtx.lineWidth = 0.5;
+            chartCtx.beginPath();
+            chartCtx.moveTo(x, padding.top);
+            chartCtx.lineTo(x, padding.top + chartH);
+            chartCtx.stroke();
+        }
+        chartCtx.fillStyle = '#ffffff';
+        chartCtx.textAlign = k === 0 ? 'left' : (k === tickCount ? 'right' : 'center');
+        const labelX = k === 0 ? padding.left + 1 : (k === tickCount ? padding.left + chartW - 1 : x);
+        chartCtx.fillText(fmtKL(priceCandles[idx].t, spanSec), labelX, padding.top + chartH + 14);
+    }
+    chartCtx.textAlign = 'left';
+
+    chartCtx.fillStyle = '#ffd700';
+    chartCtx.font = '11px monospace';
+            chartCtx.fillText('TF: ' + TF_LABELS[currentSpeedProfile] + ' | ' + (dataSource === 'real' ? 'real bars' : 'SYNTHETIC')
+        + ' | times KL (UTC+8) | drag chart to pan', padding.left + 5, 12);
+    chartCtx.fillStyle = '#ffffff';
+    chartCtx.fillText('bar ' + (startIdx + 1) + '-' + (viewEnd + 1) + ' / ' + n, padding.left + 5, chartCanvas.height - 3);
+}
+
+function setChartType(type) {
+    chartType = type;
+    document.querySelectorAll('.chart-type-btn:not(.view-btn)').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    drawChart();
+}
+
+// ---- PRACTICE WALLET (live wallet during replay) ----
+// Called from updateUI on every replay step (Play / Next / Reset): shows
+// whether the wallet is GROWING (green) or SHRINKING (red), delta vs the
+// start balance, and how much of the trial has been replayed. Also nudges
+// the profit-meter needle so the gauge tracks the walk, not just the end.
+function updatePractice() {
+    const balEl = document.getElementById('wsBal');
+    const dEl = document.getElementById('wsDelta');
+    const fillEl = document.getElementById('wsFill');
+    const metaEl = document.getElementById('wsMeta');
+    if (!balEl) return;
+    const startBalance = parseFloat(document.getElementById('startBalance').value) || 500;
+    const closed = (allTrades || []).filter(t => t.status === 'closed');
+    if (!closed.length) {
+        balEl.textContent = '$' + startBalance.toFixed(2);
+        balEl.style.color = '#ffd700';
+        dEl.className = 'ws-delta';
+        dEl.textContent = '\u25CF press Play to run the trial';
+        fillEl.style.width = '0%';
+        metaEl.textContent = 'replay progress: no trades in this walk';
+        return;
+    }
+    const idx = Math.min(Math.max(currentTradeIndex, 0), closed.length - 1);
+    const t = closed[idx];
+    const cur = (t.exitBalance != null) ? t.exitBalance : startBalance;
+    const delta = cur - startBalance;
+    const pct = startBalance > 0 ? (delta / startBalance) * 100 : 0;
+    const up = delta >= 0;
+    balEl.textContent = '$' + startBalance.toFixed(0) + ' \u2192 $' + (+cur).toFixed(2);
+    balEl.style.color = up ? '#00ff88' : '#ff5c5c';
+    dEl.className = 'ws-delta ' + (up ? 'up' : 'down');
+    dEl.textContent = (up ? '\u25B2 GROWING  +$' : '\u25BC SHRINKING  -$')
+        + Math.abs(delta).toFixed(2) + ' (' + (up ? '+' : '') + pct.toFixed(1) + '%)';
+    const prog = ((idx + 1) / closed.length) * 100;
+    fillEl.style.width = prog.toFixed(1) + '%';
+    fillEl.className = 'ws-fill' + (up ? '' : ' down');
+    metaEl.innerHTML = 'trade ' + (idx + 1) + ' / ' + closed.length
+        + ' replayed (' + prog.toFixed(0) + '%) \u00B7 last exit ' + fmtKLShort(t.exitTime)
+        + ' <b style="color:' + (t.pnl >= 0 ? '#00ff88' : '#ff5c5c') + '">'
+        + (t.pnl >= 0 ? '+$' : '-$') + Math.abs(t.pnl).toFixed(2)
+        + '</b> (' + t.reason + ')';
+    simMeterGauge(cur);
+}
+
+function updateUI() {
+    updatePractice();
+    const closedTrades = allTrades.filter(t => t.status === 'closed');
+    const startBalance = parseFloat(document.getElementById('startBalance').value) || 500;
+    if (closedTrades.length === 0) {
+        const el = document.getElementById('simStats');
+        if (el) el.innerHTML = '$' + startBalance.toFixed(0) + ' &middot; no trades';
+        currentTradeIndex = 0;
+        renderTradeList();
+        drawChart();
+        return;
+    }
+    currentTradeIndex = Math.min(currentTradeIndex, closedTrades.length - 1);
+    simStatsText();
+    bankTimesText();
+    renderTradeList();
+    drawChart();
+}
+
+function renderTradeList() {
+    const container = document.getElementById('tradeList');
+    container.innerHTML = '';
+
+    const closedTrades = allTrades.filter(t => t.status === 'closed');
+    const tradesToShow = closedTrades.slice(0, currentTradeIndex + 1).reverse();
+
+    tradesToShow.forEach((t, i) => {
+        const div = document.createElement('div');
+        div.className = 'trade-item ' + (t.isWin ? 'win' : 'loss');
+        if (i === 0 && currentTradeIndex < closedTrades.length - 1) div.classList.add('current');
+
+        let reasonHtml = '<span style="color:#ffffff;">' + t.reason + '</span>';
+        if (t.reason === 'GIVE' && t.pk > 0) {
+            reasonHtml += ' <span style="color:#8b93a7;font-size:11px;">pk $' + t.pk.toFixed(1) +
+                ' &middot; kept ' + Math.round(100 * t.pnl / t.pk) + '%</span>';
+        }
+
+        div.innerHTML =
+            '<div class="trade-num">#' + t.num + '</div>' +
+            '<div>' +
+            '<span class="trade-dir ' + t.direction.toLowerCase() + '">' + t.direction + '</span> ' +
+            '<span style="color:#ffd700;">' + t.lots.toFixed(2) + 'L</span> ' +
+            reasonHtml +
+            '<div class="trade-when">' + fmtKLShort(t.entryTime) + ' &rarr; ' + fmtKLShort(t.exitTime)
+                + ' &middot; ' + fmtDur(t.exitTime - t.entryTime) + '</div>' +
+            '</div>' +
+            '<div class="trade-pnl ' + (t.isWin ? 'positive' : 'negative') + '">' + (t.pnl >= 0 ? '+' : '') + '$' + t.pnl.toFixed(1) + '</div>';
+        container.appendChild(div);
+    });
+}
+
+function togglePlay() {
+    isPlaying = !isPlaying;
+    document.getElementById('btnPlay').textContent = isPlaying ? 'Pause' : 'Play';
+    if (isPlaying) animate();
+    else cancelAnimationFrame(animationId);
+}
+
+function animate() {
+    if (!isPlaying) return;
+    const closedTrades = allTrades.filter(t => t.status === 'closed');
+    if (currentTradeIndex < closedTrades.length - 1) {
+        currentTradeIndex++;
+        updateUI();
+        setTimeout(() => { if (isPlaying) animationId = requestAnimationFrame(animate); }, 700 / playbackSpeed);
+    } else {
+        isPlaying = false;
+        document.getElementById('btnPlay').textContent = 'Play';
+    }
+}
+
+function resetReplay() {
+    isPlaying = false;
+    cancelAnimationFrame(animationId);
+    currentTradeIndex = 0;
+    document.getElementById('btnPlay').textContent = 'Play';
+    updateUI();
+}
+
+function stepForward() {
+    const closedTrades = allTrades.filter(t => t.status === 'closed');
+    if (currentTradeIndex < closedTrades.length - 1) {
+        currentTradeIndex++;
+        updateUI();
+    }
+}
+
+function updatePlaybackSpeed() {
+    playbackSpeed = parseInt(document.getElementById('playbackSpeed').value) / 10;
+    document.getElementById('playbackLabel').textContent = playbackSpeed.toFixed(1) + 'x';
+}
+
+// ---------- auto-recalc on input change ----------
+let recalcTimer = null;
+function recalc() {
+    inputsStaged = false; paintApplyBtn();
+    generateTrades();
+    resetReplay();
+}
+
+// ---------- retired selectors (measured negative, engine dormant) ----------
+// families below never won a week: align/fade/reload/vwap/fib/beat/round/
+// fomo + tightTP/maxHold. Hidden, not deleted - demos, reset and wiring
+// still address them safely. Visible winners: cross, sine (demo vehicle),
+// GIVE engine, squeeze gate, ladder weights, costs, banking, floor.
+(function retireSelectors() {
+    const rows = ['alignOn', 'fadeOn', 'reloadOn', 'vwapOn', 'fibOn', 'beatOn',
+        'roundOn', 'fomoOn', 'tightTP'];
+    const inputs = ['fadeSpike', 'fadeN', 'vwapKEntry', 'vwapKStop', 'fibN', 'fomoN', 'maxHold'];
+    const hide = id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (el.type === 'checkbox') el.checked = false;
+        const row = el.closest('.chkrow') || el.closest('.input-group');
+        if (row) row.style.display = 'none';
+    };
+    rows.forEach(hide);
+    inputs.forEach(hide);
+})();
+
+(function wireTuningInputs() {
+    const ids = ['emaFast', 'emaSlow', 'atrStop', 'rrRatio', 'riskPct', 'baseLots',
+        'maxConcurrent', 'disasterMult', 'startBalance', 'profitTarget', 'spreadPts',
+        'givePeak', 'giveKeepPct', 'squeezePct', 'goalBalance', 'floorBalance', 'fadeSpike', 'fadeN',
+        'vwapKEntry', 'vwapKStop', 'lw1', 'lw2', 'lw3', 'fibN', 'fomoN'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', () => {
+            clearTimeout(recalcTimer);
+            recalcTimer = setTimeout(() => stageInputs(), 250);
+        });
+        el.addEventListener('change', () => stageInputs());
+    });
+    const wp = document.getElementById('wickProof');
+    if (wp) wp.addEventListener('change', () => stageInputs());
+    const ee = document.getElementById('exitEngine');
+    if (ee) ee.addEventListener('change', () => stageInputs());
+    const sq = document.getElementById('squeezeOn');
+    if (sq) sq.addEventListener('change', () => stageInputs());
+    const fo = document.getElementById('fadeOn');
+    if (fo) fo.addEventListener('change', () => stageInputs());
+    const ro = document.getElementById('reloadOn');
+    if (ro) ro.addEventListener('change', () => stageInputs());
+    const so = document.getElementById('sineOn');
+    if (so) so.addEventListener('change', () => stageInputs());
+    const bo = document.getElementById('fibOn');
+    if (bo) bo.addEventListener('change', () => stageInputs());
+    const ho = document.getElementById('beatOn');
+    if (ho) ho.addEventListener('change', () => stageInputs());
+    const to = document.getElementById('tightTP');
+    if (to) to.addEventListener('change', () => stageInputs());
+    const vo = document.getElementById('vwapOn');
+    if (vo) vo.addEventListener('change', () => recalc());
+    const co = document.getElementById('crossOn');
+    if (co) co.addEventListener('change', () => stageInputs());
+    const ao = document.getElementById('alignOn');
+    if (ao) ao.addEventListener('change', () => stageInputs());
+})();
+
+// ---------- HEARTBEAT DEMO: your screenshot style, one click ----------
+// XAUUSD 1M, sine-wave entries ONLY (limit at the turn, TP the opposite
+// extreme), ACCEL-FLIP exits (5-bar shove closes + next turn reverses),
+// no exit-engine crumbs, 1 slot, 0.03 lots, $500. Range = 7 Oct wave day.
+// ---------- MONTH REPLAY: Aug / Sept / Oct, one click each ----------
+// Arms heartbeat inputs, picks the finest XAUUSD timeframe that holds the
+// FULL month (1M starts 2 Oct so Aug/Sept auto-fall to 15M), slices the
+// month and auto-plays. Refresh-safe: no tinkering needed.
+function monthDemo(ym) {
+    document.getElementById('crossOn').checked = false;
+    document.getElementById('alignOn').checked = false;
+    document.getElementById('fadeOn').checked = false;
+    document.getElementById('reloadOn').checked = false;
+    document.getElementById('sineOn').checked = true;
+    document.getElementById('fibOn').checked = false;
+    document.getElementById('vwapOn').checked = false;
+    document.getElementById('exitEngine').checked = false;
+    document.getElementById('squeezeOn').checked = false;
+    document.getElementById('riskPct').value = 2;
+    document.getElementById('baseLots').value = 0.03;
+    document.getElementById('maxConcurrent').value = 1;
+    document.getElementById('atrStop').value = 1;
+    document.getElementById('rrRatio').value = 2;
+    document.getElementById('startBalance').value = 500;
+    document.getElementById('spreadPts').value = 34;
+    setDataSource('usd');
+    const h = window.XAUUSD_HISTORY;
+    const order = ['1min', '2min', '5min', '15min'];
+    let tf = null, t0 = null, t1 = null, n = 0;
+    for (const cand of order) {
+        const bars = h && h.timeframes && h.timeframes[cand];
+        if (!bars) continue;
+        let a = null, b = null, cnt = 0, firstDay = 99;
+        for (let i = 0; i < bars.length; i++) {
+            const kl = new Date((bars[i][0] + klShift()) * 1000).toISOString();
+            if (kl.slice(0, 7) === ym) {
+                if (a == null) { a = bars[i][0]; firstDay = parseInt(kl.slice(8, 10), 10); }
+                b = bars[i][0]; cnt++;
+            }
+        }
+        if (a != null && firstDay <= 3) { tf = cand; t0 = a; t1 = b; n = cnt; break; }
+    }
+    if (!tf) {
+        // partial-month fallback: finest TF with ANY bars
+        for (const cand of order) {
+            const bars = h && h.timeframes && h.timeframes[cand];
+            if (!bars) continue;
+            let a = null, b = null, cnt = 0;
+            for (let i = 0; i < bars.length; i++) {
+                const kl = new Date((bars[i][0] + klShift()) * 1000).toISOString();
+                if (kl.slice(0, 7) === ym) { if (a == null) a = bars[i][0]; b = bars[i][0]; cnt++; }
+            }
+            if (a != null) { tf = cand; t0 = a; t1 = b; n = cnt; break; }
+        }
+    }
+    if (!tf) { actLog('err', 'no XAUUSD bars for ' + ym); return; }
+    if (currentSpeedProfile !== tf) selectSpeed(tf);
+    else regenerate();
+    const f = document.getElementById('rangeFrom');
+    const tt = document.getElementById('rangeTo');
+    if (f && tt) { f.value = toInputValue(t0); tt.value = toInputValue(t1); }
+    applyRange();
+    const mn = document.getElementById('monthNote');
+    if (mn) mn.textContent = ym + ': ' + tf + ' ' + n + ' bars - heartbeat replaying';
+    actLog('ok', 'MONTH ' + ym + ': XAUUSD ' + tf + ' x' + n + ' bars, heartbeat $500 x 0.03L - press Play');
+    setTimeout(() => {
+        const closed = (allTrades || []).filter(t => t.status === 'closed');
+        if (closed.length > 1 && currentTradeIndex < closed.length - 1 && !isPlaying) togglePlay();
+    }, 900);
+}
+
+function heartbeatDemo() {
+    document.getElementById('crossOn').checked = false;
+    document.getElementById('alignOn').checked = false;
+    document.getElementById('fadeOn').checked = false;
+    document.getElementById('reloadOn').checked = false;
+    document.getElementById('sineOn').checked = true;
+    document.getElementById('fibOn').checked = false;
+    document.getElementById('vwapOn').checked = false;
+    document.getElementById('exitEngine').checked = false;
+    document.getElementById('squeezeOn').checked = false;
+    document.getElementById('riskPct').value = 2;
+    document.getElementById('baseLots').value = 0.03;
+    document.getElementById('maxConcurrent').value = 1;
+    document.getElementById('atrStop').value = 1;
+    document.getElementById('rrRatio').value = 2;
+    document.getElementById('startBalance').value = 500;
+    document.getElementById('spreadPts').value = 34;
+    setDataSource('usd');
+    if (currentSpeedProfile !== '1min') selectSpeed('1min');
+    // slice 7 Oct (your screenshot window) from whatever bars loaded
+    let t0 = null, t1 = null;
+    for (let i = 0; i < masterCandles.length; i++) {
+        if (fmtKLDate(masterCandles[i].t) === '2026-10-07') {
+            if (t0 == null) t0 = masterCandles[i].t;
+            t1 = masterCandles[i].t;
+        }
+    }
+    const f = document.getElementById('rangeFrom');
+    const tt = document.getElementById('rangeTo');
+    if (t0 != null && f && tt) { f.value = toInputValue(t0); tt.value = toInputValue(t1); }
+    applyRange();
+    actLog('ok', 'HEARTBEAT DEMO armed: XAUUSD 1M sine-only + accel-flip, 7 Oct, $500 x 0.03L - press Play');
+    setTimeout(() => {
+        const closed = (allTrades || []).filter(t => t.status === 'closed');
+        if (closed.length > 1 && currentTradeIndex < closed.length - 1 && !isPlaying) togglePlay();
+    }, 900);
+}
+
+function resetBest() {
+    document.getElementById('emaFast').value = DEFAULTS.emaFast;
+    document.getElementById('emaSlow').value = DEFAULTS.emaSlow;
+    document.getElementById('atrStop').value = DEFAULTS.atrStop;
+    document.getElementById('rrRatio').value = DEFAULTS.rrRatio;
+    document.getElementById('riskPct').value = DEFAULTS.riskPct;
+    document.getElementById('maxConcurrent').value = DEFAULTS.maxConcurrent;
+    document.getElementById('baseLots').value = DEFAULTS.baseLots;
+    document.getElementById('wickProof').checked = DEFAULTS.wickProof;
+    document.getElementById('disasterMult').value = DEFAULTS.disasterMult;
+    document.getElementById('profitTarget').value = DEFAULTS.profitTarget;
+    document.getElementById('spreadPts').value = DEFAULTS.spreadPts;
+    document.getElementById('exitEngine').checked = DEFAULTS.exitEngine;
+    document.getElementById('givePeak').value = DEFAULTS.givePeak;
+    document.getElementById('giveKeepPct').value = DEFAULTS.giveKeepPct;
+    document.getElementById('squeezeOn').checked = DEFAULTS.squeezeOn;
+    document.getElementById('squeezePct').value = DEFAULTS.squeezePct;
+    document.getElementById('goalBalance').value = DEFAULTS.goalBalance;
+    document.getElementById('floorBalance').value = DEFAULTS.floorBalance;
+    document.getElementById('fadeOn').checked = DEFAULTS.fadeOn;
+    document.getElementById('fadeSpike').value = DEFAULTS.fadeSpike;
+    document.getElementById('fadeN').value = DEFAULTS.fadeN;
+    document.getElementById('reloadOn').checked = DEFAULTS.reloadOn;
+    document.getElementById('sineOn').checked = DEFAULTS.sineOn;
+    document.getElementById('fibOn').checked = DEFAULTS.fibOn;
+    document.getElementById('fibN').value = DEFAULTS.fibN;
+    document.getElementById('beatOn').checked = DEFAULTS.beatOn;
+    document.getElementById('roundOn').checked = DEFAULTS.roundOn;
+    document.getElementById('fomoOn').checked = DEFAULTS.fomoOn;
+    document.getElementById('fomoN').value = DEFAULTS.fomoN;
+    document.getElementById('tightTP').checked = DEFAULTS.tightTP;
+    document.getElementById('maxHold').value = DEFAULTS.maxHold;
+    document.getElementById('vwapOn').checked = DEFAULTS.vwapOn;
+    document.getElementById('vwapKEntry').value = DEFAULTS.vwapKEntry;
+    document.getElementById('vwapKStop').value = DEFAULTS.vwapKStop;
+    document.getElementById('lw1').value = DEFAULTS.lw1;
+    document.getElementById('lw2').value = DEFAULTS.lw2;
+    document.getElementById('lw3').value = DEFAULTS.lw3;
+    document.getElementById('crossOn').checked = DEFAULTS.crossOn;
+    document.getElementById('alignOn').checked = DEFAULTS.alignOn;
+    document.getElementById('goalBalance').value = DEFAULTS.goalBalance;
+    if (currentSpeedProfile !== DEFAULTS.tf) selectSpeed(DEFAULTS.tf);
+    else recalc();
+    actLog('info', 'Resets restored: EMA ' + DEFAULTS.emaFast + '/' + DEFAULTS.emaSlow
+        + ' x' + DEFAULTS.atrStop + ' RR ' + DEFAULTS.rrRatio + ' risk ' + DEFAULTS.riskPct
+        + '% max ' + DEFAULTS.maxConcurrent + ' wick ' + DEFAULTS.disasterMult);
+}
+
+// ---------- grid fine-tuner: EMA x RR x keep% on the current range ----------
+// runs simulateTrades headlessly (DOM untouched), applies the winner to the
+// inputs and recalcs so Play shows it. RESET TO BEST restores shipped defaults.
+async function fineTune() {
+    const box = document.getElementById('tuneResults');
+    if (!priceCandles.length || priceCandles.length < 60) { actLog('err', 'fine-tune needs data first'); return; }
+    setBusy('btnTune', true);
+    box.style.display = 'block';
+    const base = readSimParams();
+    const pairs = [[5, 28], [8, 21], [10, 35], [12, 30]];
+    const rrs = [4, 5, 6];
+    const keeps = [20, 30, 40];
+    const rows = [];
+    let done = 0;
+    const total = pairs.length * rrs.length * keeps.length;
+    for (const [f, s] of pairs) {
+        for (const r of rrs) {
+            for (const k of keeps) {
+                const p = Object.assign({}, base, { emaFast: f, emaSlow: s, rrRatio: r, giveKeepPct: k });
+                let res = null;
+                try { res = simulateTrades(priceCandles, p); } catch (e) { res = null; }
+                if (res && res.closed.length >= 20) {
+                    rows.push({ f, s, r, k, n: res.closed.length, bal: Math.round(res.finalBalance), dd: +res.maxDD.toFixed(1) });
+                }
+                done++;
+                if (done % 4 === 0) {
+                    box.innerHTML = 'tuning ' + done + '/' + total + ' combos on ' + priceCandles.length + ' bars ...';
+                    await new Promise(r2 => setTimeout(r2, 0));
+                }
+            }
+        }
+    }
+    rows.sort((a, b) => b.bal - a.bal);
+    const top = rows.slice(0, 5);
+    if (!top.length) {
+        box.innerHTML = 'tuner found nothing with 20+ trades on this range.';
+    } else {
+        const w = top[0];
+        box.innerHTML = 'tuned on ' + priceCandles.length + ' bars (' + rows.length + ' scored):<br>' +
+            top.map((t, i) => (i === 0 ? '<b>' : '') + '#' + (i + 1) + ' EMA ' + t.f + '/' + t.s + ' RR' + t.r +
+                ' keep' + t.k + '% &rarr; $' + t.bal + ' (' + t.n + ' trades, DD ' + t.dd + '%)' + (i === 0 ? ' &lArr; applied</b>' : '')).join('<br>');
+        document.getElementById('emaFast').value = w.f;
+        document.getElementById('emaSlow').value = w.s;
+        document.getElementById('rrRatio').value = w.r;
+        document.getElementById('giveKeepPct').value = w.k;
+        recalc();
+        actLog('ok', 'fine-tune applied EMA ' + w.f + '/' + w.s + ' RR' + w.r + ' keep' + w.k + '% -> $' + w.bal);
+    }
+    setBusy('btnTune', false);
+}
+
+// ---------- LOSS AUTOPSY: learn from the losers, change entries ----------
+// every losing trade gets one cause. COST-KILL = spread flipped a winner.
+// HORN-FAIL = faded spike that stopped. WICK-CHOP = bar-close stop in chop.
+// DISASTER-SL = hard stop (gap through soft). BANKED-SMALL = GIVE locked
+// crumbs. REVERSED = cross flipped against the position.
+function renderAutopsy() {
+    const el = document.getElementById('autopsyBody');
+    if (!el) return;
+    const closed = allTrades.filter(t => t.status === 'closed');
+    const losers = closed.filter(t => t.pnl < 0);
+    if (!losers.length) { el.innerHTML = 'no losses in this walk - nothing to learn.'; return; }
+    const cause = t => {
+        if (t.pnl + (t.spreadPaid || 0) >= 0) return 'COST-KILL';
+        if (t.kind === 'fade' && (t.reason === 'SL' || t.reason === 'SL-hard')) return 'HORN-FAIL';
+        if (t.reason === 'SL-hard') return 'DISASTER-SL';
+        if (t.reason === 'SL') return 'WICK-CHOP';
+        if (t.reason === 'GIVE') return 'BANKED-SMALL';
+        if (t.reason === 'Reverse') return 'REVERSED';
+        return t.reason || 'OTHER';
+    };
+    const agg = {};
+    for (const t of losers) {
+        const c = cause(t);
+        if (!agg[c]) agg[c] = { n: 0, usd: 0 };
+        agg[c].n++; agg[c].usd += t.pnl;
+    }
+    const rows = Object.entries(agg).sort((a, b) => a[1].usd - b[1].usd);
+    const tot$ = losers.reduce((a, t) => a + t.pnl, 0);
+    const cross = closed.filter(t => !t.kind || t.kind === 'cross');
+    const fade = closed.filter(t => t.kind === 'fade');
+    const align = closed.filter(t => t.kind === 'align');
+    const reload = closed.filter(t => t.kind === 'reload');
+    const vwapF = closed.filter(t => t.kind === 'vwap');
+    const sineF = closed.filter(t => t.kind === 'sine');
+    const fibF = closed.filter(t => t.kind === 'fib');
+    const beatF = closed.filter(t => t.kind === 'beat');
+    const roundF = closed.filter(t => t.kind === 'round');
+    const fomoF = closed.filter(t => t.kind === 'fomo');
+    const sum = a => a.reduce((x, t) => x + t.pnl, 0);
+    const fmt$ = v => (v >= 0 ? '+' : '') + '$' + Math.round(v);
+    el.innerHTML = 'entries: cross ' + cross.length + ' (' + fmt$(sum(cross)) +
+        ') &middot; align ' + align.length + ' (' + fmt$(sum(align)) +
+        ') &middot; fade ' + fade.length + ' (' + fmt$(sum(fade)) +
+        ') &middot; reload ' + reload.length + ' (' + fmt$(sum(reload)) +
+        ') &middot; vwap ' + vwapF.length + ' (' + fmt$(sum(vwapF)) +
+        ') &middot; sine ' + sineF.length + ' (' + fmt$(sum(sineF)) +
+        ') &middot; fib ' + fibF.length + ' (' + fmt$(sum(fibF)) +
+        ') &middot; beat ' + beatF.length + ' (' + fmt$(sum(beatF)) +
+        ') &middot; round ' + roundF.length + ' (' + fmt$(sum(roundF)) +
+        ') &middot; fomo ' + fomoF.length + ' (' + fmt$(sum(fomoF)) + ')<br>' +
+        rows.map(([c, v]) => c + ': ' + v.n + ' trades, $' + Math.round(v.usd)).join(' &middot; ') +
+        '<br><b>#1 killer: ' + rows[0][0] + ' ($' + Math.round(rows[0][1].usd) + ')</b>' +
+        ' &middot; TTL-cancelled pendings: ' + (window._lastCancels || 0) +
+        ' &middot; total lost: $' + Math.round(Math.abs(tot$));
+}
+
+// ---- EARN vs GRAB: sim monthly pace vs real driver income ----
+// benchmarks = typical MY net estimates (vary by city/hours). Pace is only
+// shown past 60 days of span - annualizing a lucky week is oracle behavior.
+const GRAB_FULL_RM = 3500, USDMYR = 4.7;
+function renderEarnGrab() {
+    const el = document.getElementById('earnLine');
+    if (!el) return;
+    const closed = allTrades.filter(t => t.status === 'closed');
+    const startBalance = parseFloat(document.getElementById('startBalance').value) || 500;
+    if (closed.length < 2) { el.innerHTML = ''; return; }
+    const bk = window._lastBanked || [];
+    let bankedProfit = 0;
+    for (const b of bk) bankedProfit += b.bal - startBalance;
+    const stub = closed[closed.length - 1].exitBalance - startBalance;
+    const total = bankedProfit + stub;
+    const spanDays = Math.max(1 / 24, (closed[closed.length - 1].exitTime - closed[0].entryTime) / 86400);
+    const fmtRM = v => 'RM' + Math.round(v).toLocaleString('en-US');
+    if (spanDays < 60) {
+        el.innerHTML = 'earn: ' + (total >= 0 ? '+' : '') + '$' + Math.round(total) + ' over ' + spanDays.toFixed(1) +
+            ' days (' + fmtRM(total * USDMYR) + ') &middot; range too short to pace &mdash; Grab full-time ~RM3,500/mo rain or shine';
+        return;
+    }
+    const moUSD = total / (spanDays / 30.44);
+    const moRM = moUSD * USDMYR;
+    const rate = startBalance > 0 ? moUSD / startBalance : 0;
+    let verdict;
+    if (moUSD <= 0) verdict = '<b style="color:#ff5c5c;">LOSING pace - Grab feeds you, this does not</b>';
+    else if (moRM >= GRAB_FULL_RM) verdict = '<b style="color:#00ff88;">TRADING AHEAD by ' + fmtRM(moRM - GRAB_FULL_RM) + '/mo</b>';
+    else verdict = '<b style="color:#ffb84d;">GRAB AHEAD by ' + fmtRM(GRAB_FULL_RM - moRM) + '/mo at this pace</b>';
+    const need = rate > 0 ? '$' + Math.round((GRAB_FULL_RM / USDMYR) / rate).toLocaleString('en-US') : 'n/a';
+    el.innerHTML = 'earn pace: ' + (moUSD >= 0 ? '+' : '') + '$' + Math.round(moUSD) + '/mo (' + fmtRM(moRM) +
+        ', ' + (rate * 100).toFixed(1) + '%/mo) &middot; Grab full-time ~RM3,500/mo &middot; capital to match Grab: ' +
+        need + ' &middot; ' + verdict;
+}
+
+// ---------- staged apply: inputs park quietly, CONFIRM restarts fresh ----------
+// auto-recalc is OFF by design - every input stages, APPLY + PLAY runs a
+// fresh sim from trade 1 and autoplays. Same observable effect as a page
+// reload, but inputs survive (a real reload would wipe them).
+let inputsStaged = false;
+function paintApplyBtn() {
+    const b = document.getElementById('btnApply');
+    if (!b) return;
+    if (inputsStaged) {
+        b.disabled = false;
+        b.textContent = 'APPLY + PLAY \u25B6';
+        b.style.opacity = '1';
+    } else {
+        b.disabled = true;
+        b.textContent = 'APPLIED \u2713';
+        b.style.opacity = '0.45';
+    }
+}
+function stageInputs() {
+    inputsStaged = true;
+    paintApplyBtn();
+}
+function applyStaged() {
+    if (!inputsStaged) return;
+    inputsStaged = false;
+    paintApplyBtn();
+    recalc();
+    startPlay();
+}
+function startPlay() {
+    if (isPlaying) return;
+    isPlaying = true;
+    const b = document.getElementById('btnPlay');
+    if (b) b.textContent = 'Pause';
+    animate();
+}
+
+// ---------- LIVE M2 TICKER (MT4 has no M2 chart - we build it live) ----------
+// seed = file 2min tail for level context + session bars from bridge ticks,
+// aggregated by epoch bucket (same math as aggregateTF). Polls /api/status.
+let tickBars = [];
+function tickSeed() {
+    tickBars = [];
+    try {
+        const h = window.XAUUSD_HISTORY;
+        const raw = h && h.timeframes ? h.timeframes['2min'] : null;
+        if (raw) {
+            const tail = raw.slice(-90);
+            for (const b of tail) tickBars.push({ t: b[0], o: b[1], h: b[2], l: b[3], c: b[4] });
+        }
+    } catch (e) { /* file history optional - session bars still build */ }
+}
+function tickDraw() {
+    const cv = document.getElementById('tickChart');
+    if (!cv) return;
+    const ctx = cv.getContext('2d');
+    const W = cv.clientWidth, H = cv.clientHeight;
+    if (!W || !H) return;
+    if (cv.width !== W * 2) { cv.width = W * 2; cv.height = H * 2; }
+    ctx.setTransform(2, 0, 0, 2, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const bars = tickBars.slice(-120);
+    if (!bars.length) {
+        ctx.fillStyle = '#8b93a7'; ctx.font = '13px sans-serif';
+        ctx.fillText('waiting for live ticks...', 16, 30);
+        return;
+    }
+    let lo = Infinity, hi = -Infinity;
+    for (const b of bars) { if (b.l < lo) lo = b.l; if (b.h > hi) hi = b.h; }
+    const pad = (hi - lo) * 0.08 || 1;
+    lo -= pad; hi += pad;
+    const X = i => 8 + (i / Math.max(1, bars.length - 1)) * (W - 16);
+    const Y = p => 8 + (1 - (p - lo) / (hi - lo)) * (H - 16);
+    const bw = Math.max(2, (W - 16) / bars.length - 1);
+    for (let i = 0; i < bars.length; i++) {
+        const b = bars[i], up = b.c >= b.o;
+        ctx.strokeStyle = up ? '#00c46a' : '#ff5c5c';
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.beginPath(); ctx.moveTo(X(i), Y(b.h)); ctx.lineTo(X(i), Y(b.l)); ctx.stroke();
+        const yO = Y(b.o), yC = Y(b.c);
+        ctx.fillRect(X(i) - bw / 2, Math.min(yO, yC), bw, Math.max(1.5, Math.abs(yC - yO)));
+    }
+    const last = bars[bars.length - 1];
+    ctx.strokeStyle = '#ffd70088'; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(0, Y(last.c)); ctx.lineTo(W, Y(last.c)); ctx.stroke();
+    ctx.setLineDash([]);
+}
+async function tickPoll() {
+    const pxEl = document.getElementById('tickPrice');
+    const metaEl = document.getElementById('tickMeta');
+    if (!pxEl) return;
+    try {
+        const s = await bridgeFetch('/api/status');
+        const cost = s.cost || {};
+        const bid = cost.bid, ask = cost.ask;
+        let ts = 0;
+        if (cost.ts) ts = cost.ts * 1;
+        else if (s.timestamp) ts = Date.parse(s.timestamp) / 1000;
+        if (bid == null || ask == null) throw new Error('no quote in snapshot');
+        const age = Date.now() / 1000 - ts;
+        const mid = (bid + ask) / 2;
+        const prev = tickBars.length ? tickBars[tickBars.length - 1].c : null;
+        pxEl.textContent = mid.toFixed(2);
+        pxEl.style.color = (prev == null || mid === prev) ? '#ffffff' : (mid > prev ? '#00ff88' : '#ff5c5c');
+        const live = age < 30;
+        metaEl.innerHTML = 'spread ' + (cost.spread_pts != null ? cost.spread_pts : '?') + ' pts &middot; ' +
+            (live ? '<span style="color:#00ff88;">LIVE</span>' : '<span style="color:#ffb84d;">STALE ' + Math.round(age) + 's</span>') +
+            ' &middot; ' + tickBars.length + ' M2 bars';
+        if (!live) { tickDraw(); return; }
+        const bk = Math.floor(ts / 120) * 120;
+        const last = tickBars.length ? tickBars[tickBars.length - 1] : null;
+        if (!last || bk > last.t) {
+            tickBars.push({ t: bk, o: mid, h: mid, l: mid, c: mid });
+            if (tickBars.length > 240) tickBars.splice(0, tickBars.length - 240);
+        } else if (bk === last.t) {
+            if (mid > last.h) last.h = mid;
+            if (mid < last.l) last.l = mid;
+            last.c = mid;
+        }
+        tickDraw();
+    } catch (e) {
+        if (metaEl) metaEl.innerHTML = '<span style="color:#8b93a7;">bridge offline - ticker paused</span>';
+        tickDraw();
+    }
+}
+
+// ---------- LIVE DELTA: file snapshot + fresh bars from bridge ----------
+// every page load pulls bars newer than the file and merges just the delta,
+// so playback runs to the current minute. File data is the base; the bridge
+// fills the gap (EA serves RAM-fresh history even weekends). Failures fall
+// back to file silently. Respects ranges seized mid-fetch (demos).
+const TF_SECS = { '1min': 60, '2min': 120, '5min': 300, '15min': 900, '30min': 1800, '1hour': 3600, '4hour': 14400, 'daily': 86400 };
+async function refreshLiveDelta() {
+    try {
+        if (currentSymbol !== 'usd') return;
+        if (!masterCandles.length) return;
+        const tfSec = TF_SECS[currentSpeedProfile] || 60;
+        const lastT = masterCandles[masterCandles.length - 1].t;
+        const nowFile = Date.now() / 1000 + 10800;
+        const need = Math.ceil((nowFile - lastT) / tfSec) + 30;
+        if (need <= 35) return;
+        const rf = document.getElementById('rangeFrom'), rt = document.getElementById('rangeTo');
+        const rf0 = rf ? rf.value : null, rt0 = rt ? rt.value : null;
+        const count = Math.max(50, Math.min(3000, need));
+        const ctl = new AbortController();
+        const to = setTimeout(() => ctl.abort(), 30000);
+        let r;
+        try {
+            r = await fetch('http://127.0.0.1:8765/api/bars?symbol=XAUUSD&tf=' + currentSpeedProfile + '&count=' + count, { signal: ctl.signal });
+        } finally { clearTimeout(to); }
+        if (!r.ok) return;
+        const j = await r.json();
+        const fresh = (j.bars || []).filter(b => b[0] > lastT);
+        if (!fresh.length) return;
+        for (const b of fresh) masterCandles.push({ t: b[0], o: b[1], h: b[2], l: b[3], c: b[4] });
+        if (masterCandles.length > 15000) masterCandles.splice(0, masterCandles.length - 15000);
+        const rf1 = rf ? rf.value : null, rt1 = rt ? rt.value : null;
+        if (rf0 === rf1 && rt0 === rt1) {
+            if (rt && rt.value) rt.value = toInputValue(masterCandles[masterCandles.length - 1].t);
+            applyRange();
+            actLog('ok', 'live delta: +' + fresh.length + ' ' + currentSpeedProfile + ' bars thru ' +
+                fmtKLShort(masterCandles[masterCandles.length - 1].t) + ' (file + bridge)');
+        }
+    } catch (e) { /* file data stands - bridge/EA offline or market closed */ }
+}
+
+// ---------- visible error trap: failures surface for AI diagnosis ----------
+// any runtime error or rejected promise lands in a red banner (top of page)
+// with message + location + the last 3 errors kept. Screenshot it or copy
+// the text straight into an AI chat. Quiet when healthy.
+(function errorTrap() {
+    if (window.__errTrapOn) return;
+    window.__errTrapOn = true;
+    window.__errLog = [];
+    const bar = document.createElement('div');
+    bar.id = 'errBar';
+    bar.style.cssText = 'display:none;position:sticky;top:0;z-index:9999;background:#3a0d0d;color:#ffb3b3;border:1px solid #ff5c5c;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-family:Consolas,monospace;font-size:12px;white-space:pre-wrap;';
+    document.body.insertBefore(bar, document.body.firstChild);
+    const show = msg => {
+        try {
+            window.__errLog.push(new Date().toISOString() + ' ' + msg);
+            if (window.__errLog.length > 20) window.__errLog.shift();
+            bar.style.display = 'block';
+            bar.textContent = 'ERROR - screenshot or copy this for AI diagnosis:\n' + window.__errLog.slice(-3).join('\n');
+        } catch (e) { /* trap must never throw */ }
+    };
+    window.addEventListener('error', e => show((e.message || 'unknown error') + ' @ ' + (e.filename || '').split('/').pop() + ':' + (e.lineno || '?')));
+    window.addEventListener('unhandledrejection', e => show('promise: ' + (e.reason && e.reason.message ? e.reason.message : String(e.reason))));
+    window.__reportError = show;
+})();
+
+// ---------- LIVE COCKPIT (bridge -> mt5_bot_v2) ----------
+const BRIDGE = 'http://127.0.0.1:8765';
+let cockpitSeenResult = 0;
+
+const actRows = [];
+function actLog(kind, msg) {
+    actRows.unshift({t: new Date().toLocaleTimeString('en-GB'), kind: kind, msg: msg});
+    if (actRows.length > 40) actRows.pop();
+    const el = document.getElementById('actLog');
+    if (!el) return;
+    el.innerHTML = actRows.map(r =>
+        '<div class="row ' + r.kind + '"><span class="t">' + r.t + '</span>' +
+        '<span class="m">' + r.msg + '</span></div>').join('');
+}
+function setBusy(id, busy) {
+    const b = document.getElementById(id);
+    if (!b) return;
+    b.classList.toggle('busy', !!busy);
+    b.disabled = !!busy || b.dataset.blocked === '1';
+}
+function why(txt) {
+    const el = document.getElementById('cockpitWhy');
+    if (el) el.textContent = txt || '';
+}
+function chip(label, state) {
+    return '<span class="chip ' + state + '"><span class="led"></span>' + label + '</span>';
+}
+function fmtTF(tf) { return TF_LABELS[tf] || tf || '?'; }
+
+const liveState = {bridge: false, bot: false, algo: null, equity: null, tf: null};
+let lastRunningSig = null, runningSince = null;
+
+function runningSig(c) {
+    return JSON.stringify([c.timeframe, c.ema_fast, c.ema_slow, c.atr_stop_mult,
+        c.rr_ratio, c.risk_pct, c.base_lots, c.max_concurrent, c.profit_target_usd,
+        c.gates && c.gates.breakout_n, c.gates && c.gates.breakeven_r]);
+}
+
+function renderRunningStrategy(c) {
+    const el = document.getElementById('liveStrategy');
+    if (!el || !c) return;
+    const g = c.gates || {};
+    const gatesTxt = g.breakout_n ? 'bo' + g.breakout_n : 'nobreakout';
+    el.innerHTML = '<span style="color:#ffffff;">RUNNING:</span> '
+        + '<b style="color:#ffd700;">' + fmtTF(c.timeframe) + '</b>'
+        + ' EMA <b>' + c.ema_fast + '/' + c.ema_slow + '</b>'
+        + ' x<b>' + c.atr_stop_mult + '</b>'
+        + ' RR <b>' + c.rr_ratio + '</b>'
+        + ' risk <b>' + c.risk_pct + '%</b>'
+        + ' ' + c.base_lots + 'L max ' + c.max_concurrent
+        + ' <span style="color:#c58fff;">' + gatesTxt
+        + (g.atr_expansion ? '+ATRexp' : '')
+                        + (g.breakeven_r ? '+BE' + g.breakeven_r + 'R' : '') + '</span>';
+    const sig = runningSig(c);
+    if (sig !== lastRunningSig) {
+        if (lastRunningSig !== null) actLog('info', 'bot config CHANGED (read from bot itself)');
+        lastRunningSig = sig;
+        runningSince = new Date().toLocaleTimeString('en-GB');
+    }
+
+    try {
+        const mine = collectStrategy();
+        const diverged = ['timeframe', 'ema_fast', 'ema_slow', 'atr_stop_mult',
+            'rr_ratio', 'risk_pct', 'max_concurrent', 'base_lots']
+            .some(k => String(mine[k]) !== String(c[k]));
+        if (diverged) {
+            el.style.borderColor = '#ffd166';
+            el.insertAdjacentHTML('beforeend',
+                '<div style="color:#ffd166; font-size:11.5px;">inputs differ from running bot - PUSH TO BOT to sync</div>');
+        } else {
+            el.style.borderColor = '#00ff8855';
+        }
+    } catch (e) { /* inputs not ready */ }
+}
+
+async function bridgeFetch(path, opts) {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 6000);
+    try {
+        const r = await fetch(BRIDGE + path, Object.assign({}, opts, {signal: ctl.signal}));
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return await r.json();
+    } finally {
+        clearTimeout(t);
+    }
+}
+
+function collectStrategy() {
+    return {
+        symbol: 'XAUUSD',
+        timeframe: currentSpeedProfile,
+        ema_fast: +document.getElementById('emaFast').value || 10,
+        ema_slow: +document.getElementById('emaSlow').value || 28,
+        atr_stop_mult: +document.getElementById('atrStop').value || 3,
+        rr_ratio: +document.getElementById('rrRatio').value || 5,
+        risk_pct: +document.getElementById('riskPct').value || 5,
+        max_concurrent: +document.getElementById('maxConcurrent').value || 3,
+        base_lots: +document.getElementById('baseLots').value || 0.01,
+        wick_proof_stop: document.getElementById('wickProof').checked,
+        disaster_stop_mult: +document.getElementById('disasterMult').value || 1.5,
+        profit_target_usd: +document.getElementById('profitTarget').value || 0
+    };
+}
+
+function describeStrategy(c) {
+    return 'TF ' + fmtTF(c.timeframe) + ' EMA ' + c.ema_fast + '/' + c.ema_slow
+        + ' x' + c.atr_stop_mult + ' RR ' + c.rr_ratio
+        + ' risk ' + c.risk_pct + '% max ' + c.max_concurrent + ' pos';
+}
+
+async function verifyBotHas(cfg, tries) {
+    // proof = the RUNNING bot reports these values, not just the config file
+    return bridgeFetch('/api/status').then(s => {
+        const live = (s && s.config) || {};
+        const age = Math.max(0, Math.round((Date.now() - new Date(s.timestamp).getTime()) / 1000));
+        if (age >= 30) throw new Error('bot not running (heartbeat ' + age + 's old)');
+        const match = ['timeframe', 'ema_fast', 'ema_slow', 'atr_stop_mult', 'rr_ratio',
+            'risk_pct', 'max_concurrent', 'profit_target_usd']
+            .every(k => String(live[k]) === String(cfg[k]));
+        if (match) return true;
+        if ((tries || 0) > 0) {
+            return new Promise(r => setTimeout(r, 2000)).then(() => verifyBotHas(cfg, tries - 1));
+        }
+        return false;
+    });
+}
+
+async function pushStrategy() {
+    const cfg = collectStrategy();
+    if (cfg.ema_fast >= cfg.ema_slow) {
+        actLog('err', 'not pushed - EMA fast (' + cfg.ema_fast + ') must be below EMA slow (' + cfg.ema_slow + ')');
+        return;
+    }
+    if (!confirm('PUSH TO LIVE BOT?\n' + describeStrategy(cfg) + '\n\nThis overwrites the running bot config. Cancel keeps everything as-is.')) {
+        actLog('info', 'push cancelled - live bot untouched');
+        return;
+    }
+    setBusy('btnPushStrategy', true);
+    actLog('info', 'pushing: ' + describeStrategy(cfg));
+    try {
+        const res = await bridgeFetch('/api/config', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(cfg)
+        });
+        let verified = false, whyNot = '';
+        try {
+            verified = await verifyBotHas(cfg, 5);
+        } catch (e) {
+            whyNot = ' (' + e.message + ')';
+        }
+        if (verified) {
+            actLog('ok', 'PUSHED + CONFIRMED - the running bot now reports: ' + describeStrategy(cfg));
+        } else {
+            actLog('err', 'saved to file' + whyNot + ' but the running bot has not picked it up. If the bot is stopped, press START BOT.');
+        }
+    } catch (e) {
+        actLog('err', 'push failed: ' + e.message + ' - is godmode\\bridge.py running?');
+    } finally {
+        setBusy('btnPushStrategy', false);
+    }
+}
+
+function sendCmd(action) {
+    const lots = +document.getElementById('baseLots').value || 0.01;
+    const id = Date.now();
+    const verb = action === 'buy' ? 'BUY' : (action === 'sell' ? 'SELL' : 'CLOSE ALL');
+    const btn = {buy: 'btnBuy', sell: 'btnSell', close_all: 'btnCloseAll'}[action];
+    const label = action === 'close_all' ? 'CLOSE ALL' : verb + ' ' + lots + ' ' + (currentSymbol === 'usd' ? 'XAUUSD' : 'XAUEUR');
+    setBusy(btn, true);
+    actLog('info', 'sending ' + label + ' ...');
+    cockpitPendingCmd = {id: id, label: label, btn: btn};
+    bridgeFetch('/api/cmd', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: id, action: action, lots: lots})})
+        .then(() => actLog('wait', label + ' queued - waiting for the broker (up to 15s)'))
+        .catch(e => {
+            actLog('err', verb + ' failed to send: ' + e.message);
+            setBusy(btn, false);
+            if (cockpitPendingCmd && cockpitPendingCmd.id === id) cockpitPendingCmd = null;
+        });
+}
+
+let cockpitPendingCmd = null;
+
+// sim pace for the live-vs-sim comparison (trades/day on this range)
+function simPaceText() {
+    const closed = allTrades.filter(t => t.status === 'closed');
+    if (closed.length < 2) return '--';
+    const spanDays = Math.max(1 / 24, (closed[closed.length - 1].exitTime - closed[0].entryTime) / 86400);
+    return '~' + Math.max(1, Math.round(closed.length / spanDays)) + '/day over ' + spanDays.toFixed(1) + 'd';
+}
+
+async function cockpitPoll() {
+    try {
+        const s = await bridgeFetch('/api/status');
+        const age = Math.max(0, Math.round((Date.now() - new Date(s.timestamp).getTime()) / 1000));
+        const alive = age < 30;
+        const cd = s.cooldown || {};
+        const eq = cd.broker_equity != null ? cd.broker_equity : (s.account ? s.account.equity : null);
+        const bal = cd.broker_balance != null ? cd.broker_balance : (s.account ? s.account.balance : null);
+        const posN = cd.open_positions_broker != null ? cd.open_positions_broker : (s.positions ? s.positions.length : '?');
+        const liveTf = (s.config && s.config.timeframe) || '?';
+        const algo = cd.autotrading;
+        liveState.bridge = true;
+        liveState.bot = alive;
+        liveState.algo = algo;
+        liveState.equity = eq;
+        liveState.tf = liveTf;
+
+        document.getElementById('liveChips').innerHTML =
+            chip(alive ? 'BOT LIVE' : 'BOT DEAD', alive ? 'ok' : 'bad')
+            + chip(algo === false ? 'ALGO OFF' : (algo ? 'ALGO ON' : 'ALGO ?'),
+                algo === false ? 'bad' : (algo ? 'ok' : 'warn'))
+            + chip('TF ' + fmtTF(liveTf), alive ? 'ok' : 'idle')
+            + chip('EQ $' + (eq != null ? (+eq).toFixed(2) : '?'), 'ok')
+            + chip(posN + ' OPEN', posN ? 'warn' : 'idle')
+            + (cd.profit_guard ? chip('GUARD $' + cd.profit_guard.target, 'warn') : chip('GUARD OFF', 'bad'));
+
+        renderRunningStrategy(s.config);
+
+        document.getElementById('cockpitEquity').value = '$' + (eq != null ? (+eq).toFixed(2) : '?') + ' / $' + (bal != null ? (+bal).toFixed(2) : '?');
+        document.getElementById('cockpitRadar').value = s.radar ? s.radar.mode + ' score ' + s.radar.score : '?';
+        document.getElementById('cockpitPos').value = posN;
+        // live-vs-sim pace: bot's today count beside sim pace on this range.
+        // quiet bot + busy sim = investigate (gates? wedge? no signals?).
+        try {
+            const st = s.stats || {};
+            const pel = document.getElementById('paceLine');
+            if (pel) {
+                const tn = st.today_trades || 0, tp = st.today_pnl || 0;
+                pel.innerHTML = 'LIVE today: <b>' + tn + ' trades</b> (' + (tp >= 0 ? '+' : '') + '$' + (+tp).toFixed(2) + ')' +
+                    ' &middot; sim pace on this range: <b>' + simPaceText() + '</b>' +
+                    ' &middot; quiet bot + busy sim = check gates/log';
+            }
+        } catch (e) { /* pace line optional */ }
+        document.getElementById('autoTradeWarn').style.display = (algo === false) ? 'block' : 'none';
+
+        const stEl = document.getElementById('liveStatus');
+        if (stEl) {
+            stEl.textContent = (alive ? 'LIVE' : 'STALE (' + age + 's)') + ' - heartbeat ' + age + 's ago'
+                + (s.radar ? ' - radar ' + s.radar.mode : '');
+            stEl.style.color = alive ? '#8bd17c' : '#ff6b6b';
+        }
+
+        const blocked = (id, cond, reason) => {
+            const b = document.getElementById(id);
+            if (!b) return;
+            b.dataset.blocked = cond ? '1' : '0';
+            if (!b.classList.contains('busy')) b.disabled = cond;
+            if (cond) b.title = reason; else b.title = '';
+        };
+        const tradeBlock = !alive ? 'bot is not running - press START BOT'
+            : (algo === false ? 'AutoTrading is OFF in MT4 (Ctrl+E)' : '');
+        blocked('btnBuy', !!tradeBlock, tradeBlock);
+        blocked('btnSell', !!tradeBlock, tradeBlock);
+        blocked('btnCloseAll', !alive, !alive ? 'the bot executes the close' : '');
+        blocked('btnStartBot', alive, 'already running (press STOP to halt)');
+        blocked('btnStopBot', false, '');
+        why(tradeBlock || '');
+
+        try {
+            const r = await bridgeFetch('/api/cmd-result');
+            if (r && r.id && r.id !== cockpitSeenResult) {
+                cockpitSeenResult = r.id;
+                if (cockpitPendingCmd && r.id === cockpitPendingCmd.id) {
+                    actLog(r.ok ? 'ok' : 'err', (r.ok ? 'OK ' : 'FAIL ') + cockpitPendingCmd.label + ': ' + r.detail);
+                    setBusy(cockpitPendingCmd.btn, false);
+                    cockpitPendingCmd = null;
+                } else {
+                    actLog(r.ok ? 'ok' : 'err', (r.ok ? 'OK ' : 'FAIL ') + r.detail);
+                }
+            }
+        } catch (e) { /* result endpoint optional */ }
+    } catch (e) {
+        liveState.bridge = false;
+        const chips = document.getElementById('liveChips');
+        if (chips) chips.innerHTML = chip('BRIDGE OFFLINE', 'bad');
+        const stEl = document.getElementById('liveStatus');
+        if (stEl) { stEl.textContent = 'bridge offline - bot stopped by you? press START BOT to resume'; stEl.style.color = '#ff6b6b'; }
+        why('bridge offline - buttons dead until bridge.py runs');
+        ['btnBuy', 'btnSell', 'btnCloseAll', 'btnPushStrategy', 'btnStartBot', 'btnStopBot'].forEach(id => {
+            const b = document.getElementById(id);
+            if (b) { b.dataset.blocked = '1'; if (!b.classList.contains('busy')) b.disabled = true; b.title = 'bridge offline'; }
+        });
+    }
+}
+setInterval(cockpitPoll, 5000);
+cockpitPoll();
+
+// ---------- bot console ----------
+let consoleCache = '';
+let termFilter = 'all', termBuf = [];
+
+async function startBot() {
+    const note = document.getElementById('startNote');
+    setBusy('btnStartBot', true);
+    note.textContent = '';
+    actLog('warn', 'START pressed - clears the $100 guard baseline; bot re-targets from current equity');
+    try {
+        const res = await bridgeFetch('/api/start', {method: 'POST'});
+        const removed = (res && res.removed && res.removed.length) ? res.removed.join(', ') : 'nothing';
+        actLog('info', 'bridge cleared: ' + removed);
+        const t0 = Date.now();
+        const timer = setInterval(async () => {
+            const secs = Math.round((Date.now() - t0) / 1000);
+            note.textContent = 'starting... ' + secs + 's (watchdog takes ~35s)';
+            try {
+                const s = await bridgeFetch('/api/status');
+                const age = Math.max(0, Math.round((Date.now() - new Date(s.timestamp).getTime()) / 1000));
+                if (age < 30) {
+                    clearInterval(timer);
+                    setBusy('btnStartBot', false);
+                    note.textContent = '';
+                    const cfg = s.config || {};
+                    actLog('ok', 'BOT IS LIVE - trading ' + fmtTF(cfg.timeframe)
+                        + ' EMA ' + cfg.ema_fast + '/' + cfg.ema_slow
+                        + ' x' + cfg.atr_stop_mult
+                        + ' equity $' + ((s.cooldown && s.cooldown.broker_equity) || 0).toFixed(2));
+                }
+                if (secs > 75) {
+                    clearInterval(timer);
+                    setBusy('btnStartBot', false);
+                    note.textContent = '';
+                    actLog('err', 'bot did NOT come up in 75s. Check MT4 is open + Algo ON, then godmode\\bot_live_err.log');
+                    return;
+                }
+            } catch (e) { /* keep polling */ }
+        }, 2500);
+    } catch (e) {
+        setBusy('btnStartBot', false);
+        actLog('err', 'start failed: ' + e.message);
+    }
+}
+
+async function stopBot() {
+    const note = document.getElementById('startNote');
+    setBusy('btnStopBot', true);
+    actLog('warn', 'STOP pressed - creating kill-switch flag; watchdog halts bot + bridge within ~40s');
+    try {
+        const res = await bridgeFetch('/api/stop', {method: 'POST'});
+        if (res && res.ok) {
+            note.textContent = 'STOPPED - the bot halts in ~40s. Bridge stays up so you still see status here; press START BOT to resume.';
+            actLog('ok', 'STOP confirmed - kill-switch flag created; watchdog stops the trader within ~40s. No new entries will fire.');
+        } else {
+            actLog('err', 'stop failed: unexpected response');
+            setBusy('btnStopBot', false);
+        }
+    } catch (e) {
+        setBusy('btnStopBot', false);
+        actLog('err', 'stop failed: ' + e.message);
+    }
+}
+
+function classifyLog(l) {
+    if (/Traceback|UnboundLocal|NameError|exception|kill switch|rejected|failed/i.test(l)) return 'err';
+    if (/\[bank\]/.test(l)) return 'vault';
+    if (/OPEN (LONG|SHORT)|WICK-STOP|-> ok|-> filled|-> SL|close_all/i.test(l)) return 'trade';
+    if (/\[gate\]/.test(l)) return 'gate';
+    if (/\[think\]/.test(l)) return 'think';
+    if (/\[ctx\]|\[be\]|\[pending\]|\[config\]|\[cmd\]|\[SAFE\]|learner|relearn|FILTERED/.test(l)) return 'sys';
+    return 'raw';
+}
+const TERM_COLOR = {err: '#ff6b6b', vault: '#00ff88', trade: '#00ff88', gate: '#ff9f43',
+    think: '#7ec8ff', sys: '#c58fff', radar: '#ffffff', raw: '#ffffff'};
+
+function termLine(e, showTs) {
+    const ts = showTs && /^\[\d{2}:\d{2}:\d{2}\]/.test(e.l.trim()) ? '' : '';
+    return '<div style="color:' + TERM_COLOR[e.cls] + '">' + e.l.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>';
+}
+
+function botState(lines) {
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const l = lines[i];
+        if (/Traceback|Unbound|NameError|exception/.test(l)) return ['ERROR - CRASH', 'bad'];
+        if (/\[SAFE\]/.test(l)) return ['STAND-DOWN (check MT4 login)', 'warn'];
+        if (/\[bank\]/.test(l)) return ['BANKED +$100', 'ok'];
+        if (/OPEN (LONG|SHORT)/.test(l)) return ['EXECUTING', 'ok'];
+        if (/\[think\].*holding/.test(l)) return ['MANAGING POSITION', 'ok'];
+        if (/\[gate\]/.test(l)) return ['GATING WEAK SETUPS', 'warn'];
+        if (/\[think\].*waiting for the cross/.test(l)) return ['WAITING FOR CROSS', 'warn'];
+        if (/\[think\].*cooldown/.test(l)) return ['COOLDOWN', 'warn'];
+        if (/\[think\].*signal HELD/.test(l)) return ['RETRYING FILL', 'warn'];
+        if (/radar=RED|FLATTEN/.test(l)) return ['RADAR RED', 'bad'];
+        if (/connected:/.test(l)) return ['BOOTED', 'ok'];
+    }
+    return ['STARTING', 'idle'];
+}
+
+function renderTerm() {
+    const el = document.getElementById('botConsole');
+    if (!el) return;
+    const stick = el.scrollTop + el.clientHeight >= el.scrollHeight - 60;
+    const rows = termBuf.filter(e => termFilter === 'all' || e.cls === termFilter);
+    el.innerHTML = rows.slice(-220).map(x => termLine(x)).join('');
+    if (stick) el.scrollTop = el.scrollHeight;
+}
+
+function setTermFilter(f) {
+    termFilter = f;
+    document.querySelectorAll('.chip[data-f]').forEach(ch => {
+        ch.className = 'chip ' + (ch.dataset.f === f ? 'ok' : 'idle');
+    });
+    renderTerm();
+}
+
+async function pollConsole() {
+    const stEl = document.getElementById('consoleState');
+    try {
+        const r = await bridgeFetch('/api/log');
+        const lines = r.lines || [];
+        if (!lines.length) {
+            stEl.textContent = 'no log yet - press START BOT (needs MT4 open)';
+            return;
+        }
+        const last = lines[lines.length - 1];
+        const idx = consoleCache ? lines.indexOf(consoleCache) : -1;
+        const fresh = consoleCache === ''
+            ? lines.slice(-140)
+            : (idx >= 0 ? lines.slice(idx + 1) : lines.slice(-140));
+        consoleCache = last;
+        if (fresh.length) {
+            if (termBuf.length + fresh.length > 600) termBuf = termBuf.slice(-420);
+            fresh.forEach(l => termBuf.push({l: l, cls: classifyLog(l)}));
+            renderTerm();
+        }
+        const st = botState(lines);
+        const badge = document.getElementById('botStateBadge');
+        badge.className = 'chip ' + st[1];
+        badge.textContent = 'STATE: ' + st[0];
+        const nowEl = document.getElementById('botNow');
+        const th = termBuf.filter(e => e.cls === 'think').slice(-1)[0];
+        if (nowEl && th) {
+            nowEl.innerHTML = '<span style="color:#ffffff;">NOW:</span> '
+                + th.l.replace(/^\s*\[think\]\s*/, '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        }
+        stEl.textContent = 'streaming live (' + termBuf.length + ' lines)';
+        stEl.style.color = '#8bd17c';
+    } catch (e) {
+        stEl.textContent = 'bridge offline - it auto-starts at Windows logon';
+        stEl.style.color = '#ff6b6b';
+    }
+}
+setInterval(pollConsole, 3000);
+pollConsole();
+
+// ---- VS LIVE ACCOUNT panel: balances/gates/guard straight from the bot ----
+function renderVsMt5(s) {
+    const el = document.getElementById('vsLive');
+    if (!el || !s) return;
+    const a = s.account || {}, c = s.config || {}, cd = s.cooldown || {};
+    const pg = cd.profit_guard || {};
+    const age = Math.max(0, Math.round((Date.now() - new Date(s.timestamp).getTime()) / 1000));
+    const eq = parseFloat(a.equity) || 0, bal = parseFloat(a.balance) || 0;
+    const pos = (s.positions || []).length;
+    const g = c.gates || {};
+    const ageCls = age <= 30 ? 'vs-age' : 'vs-age stale';
+    const wrSlots = document.getElementById('vsSlots');
+    if (wrSlots) wrSlots.textContent = c.max_concurrent != null ? c.max_concurrent : '?';
+    el.innerHTML = '<div class="vs-k">LIVE MT4 ACCOUNT <span class="' + ageCls + '">'
+        + (age <= 30 ? 'fresh ' + age + 's ago' : 'STALE ' + age + 's old') + '</span></div>'
+        + '<div class="vs-line">balance <b>$' + bal.toFixed(2) + '</b> &middot; equity <b style="color:'
+        + (eq >= bal ? '#00ff88' : '#ff4d4d') + '">$' + eq.toFixed(2) + '</b> &middot; open pos <b>'
+        + pos + '</b> &middot; radar ' + (s.radar ? s.radar.score : 0) + '</div>'
+        + '<div class="vs-line">profit guard stops at <b>$' + (+pg.target || 0).toFixed(2)
+        + '</b> (base $' + (+pg.baseline || 0).toFixed(2) + ') &middot; floor ' + (c.equity_floor_usd ? '<b>$' + (+c.equity_floor_usd).toFixed(2) + '</b>' : '<b>OFF</b>') + ' &middot; auto-trade <b>'
+        + (cd.autotrading === false ? 'OFF' : 'ON') + '</b> &middot; stop-outs 10min: '
+        + (cd.recent_stop_outs || 0) + '</div>'
+        + '<div class="vs-line">entry <b>' + (c.entry_mode || '?') + '</b> &middot; risk <b>'
+        + c.risk_pct + '%</b> &middot; stop <b>x' + c.atr_stop_mult + '</b> &middot; RR <b>'
+        + c.rr_ratio + '</b> &middot; slots <b>' + c.max_concurrent + '</b></div>'
+        + '<div class="vs-line">gates: break <b>' + (g.breakout_n || 0) + '</b> &middot; ATR-exp <b>'
+        + (g.atr_expansion ? 'ON' : 'OFF') + '</b> &middot; ADX&ge;' + (c.regime_gate_thr || 0)
+        + ' &middot; whip ' + (c.whip_break_n || 0) + '/' + (c.whip_break_bars || 0)
+        + ' &middot; spread <b>' + (s.cost ? s.cost.spread_pts : 80) + ' pts</b></div>';
+}
+async function pollVsMt5() {
+    const el = document.getElementById('vsLive');
+    try {
+        renderVsMt5(await bridgeFetch('/api/status'));
+    } catch (e) {
+        if (el) el.innerHTML = '<div class="vs-k">LIVE MT4 ACCOUNT</div><div class="vs-line" style="color:#ff4d4d">bridge offline: '
+            + (e && e.message ? e.message : e) + '</div>';
+    }
+}
+pollVsMt5();
+setInterval(pollVsMt5, 10000);
+
+
+// auto-refresh bars hint: badge tells you when data is stale
+window.addEventListener('resize', () => { chartCanvas = null; drawChart(); });
+setDataSource('usd');
+// BOOT MIRROR (user 2026-10-12): refresh opens on the RUNNING bot's timeframe
+// (its self-compiled 2min charts), not the 1min research default. One shot at
+// boot only - later speed clicks are never overridden. Falls back to defaults
+// if the bridge/bot is unreachable.
+(function bootMirror() {
+    let done = false;
+    const go = tf => {
+        if (done) return; done = true;
+        if (tf && document.querySelector('[data-speed="' + tf + '"]')) {
+            currentSpeedProfile = tf;
+            document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+            const btn = document.querySelector('[data-speed="' + tf + '"]');
+            if (btn) btn.classList.add('active');
+        }
+        regenerate();
+        octPreset();
+    };
+    setTimeout(() => go(null), 2500);
+    try {
+        bridgeFetch('/api/status').then(s => go(s && s.config && s.config.timeframe)).catch(() => go(null));
+    } catch (e) { go(null); }
+})();
+// HEARTBEAT PRESET: slice the backtest to the 7 Oct wave day ($500 start)
+// so refresh = replay your screenshot window, no tinkering.
+function octPreset() {
+    if (!masterCandles.length) return;
+    // default window: Sep 30 -> latest bar (user practice window);
+    // under 1000 bars -> full span (a practice run needs data to chew).
+    // (Clicking a TF button always loads its full span.)
+    let t0 = null;
+    const t1 = masterCandles[masterCandles.length - 1].t;
+    for (let i = 0; i < masterCandles.length; i++) {
+        if (fmtKLDate(masterCandles[i].t) >= '2026-09-30') { t0 = masterCandles[i].t; break; }
+    }
+    const spanN = t0 == null ? 0 : masterCandles.filter(c => c.t >= t0).length;
+    const f = document.getElementById('rangeFrom');
+    const tt = document.getElementById('rangeTo');
+    if (t0 != null && spanN >= 1000 && f && tt) { f.value = toInputValue(t0); tt.value = toInputValue(t1); }
+    else if (f && tt) { f.value = ''; tt.value = ''; }
+    applyRange();
+}
+tickSeed();
+tickPoll();
+setInterval(tickPoll, 4000);
+refreshLiveDelta();
+</script>
+</body>
+</html>
