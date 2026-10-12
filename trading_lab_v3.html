@@ -343,6 +343,9 @@
                     <button class="btn btn-secondary" id="btnPresetA" onclick="applyPreset('A')" title="Load live-bot settings (ATR3.5 RR6 r3.5 1slot) on 2min full span and replay">A-LIVE</button>
                     <button class="btn btn-secondary" id="btnPresetB" onclick="applyPreset('B')" title="Load sweep-champ settings (ATR1.25 RR6 r3 2slots) on 2min full span and replay">B-CHAMP</button>
                     <button class="btn btn-secondary" id="btnPresetC" onclick="applyPreset('C')" title="Load original classic (ATR1 RR5 r5 3slots) on 2min full span and replay">C-CLASSIC</button>
+                    <button class="btn btn-secondary" id="btnLotHonest" onclick="setLotPreset('honest')" title="Honest size: 0.05 floor + $20 cap (live-comparable)">LOT 0.05</button>
+                    <button class="btn btn-secondary" id="btnLotStd" onclick="setLotPreset('std')" title="Standard size: 0.45 floor, cap off (the 84% era)">LOT 0.45</button>
+                    <button class="btn btn-secondary" id="btnLotWhale" onclick="setLotPreset('whale')" title="Whale size: 1.0 floor, cap off. NEVER push to live">LOT 1.0</button>
                     <span class="mono-line" id="abcReadout" style="flex:1 1 100%;color:#ffd700;"></span>
                     <button class="btn btn-success" onclick="heartbeatDemo()" title="Sine-wave heartbeat preset: XAUUSD 1M, sine-only, accel-flip exits, Oct 7 wave day">HEARTBEAT DEMO</button>
                     <span class="mono-line" id="liveStrategy" style="flex:1 1 100%;">
@@ -3204,6 +3207,50 @@ async function verifyBotHas(cfg, tries) {
     });
 }
 
+// LOT SIZE presets (user 2026-10-12): same strategy, three wallets -
+// measures how size alone moves measured WR. Honest (0.05 + $20 cap) is
+// live-comparable. Std (0.45, cap off) replays the 84% era. Whale (1.0,
+// cap off) hunts the 90% memory. NEVER push Std/Whale floors to live:
+// sim floor 1.0 would arrive as live cap base (same name, other job).
+const PRESETS_LOT = {
+    honest: { label: 'LOT-HONEST', lots: 0.05, cap: 20 },
+    std: { label: 'LOT-STD', lots: 0.45, cap: 0 },
+    whale: { label: 'LOT-WHALE', lots: 1.0, cap: 0 }
+};
+function setLotPreset(k) {
+    const P = PRESETS_LOT[k];
+    if (!P) return;
+    currentSpeedProfile = '2min';
+    document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector('[data-speed="2min"]');
+    if (btn) btn.classList.add('active');
+    document.getElementById('baseLots').value = P.lots;
+    document.getElementById('maxLossUsd').value = P.cap;
+    document.getElementById('rangeFrom').value = '';
+    document.getElementById('rangeTo').value = '';
+    regenerate();
+    const all = allTrades || [];
+    const n = all.length;
+    const wr = n ? Math.round(100 * all.filter(t => t.isWin).length / n) : 0;
+    const bk = window._lastBanked || [];
+    const cutIdx = bk.length ? bk[bk.length - 1].trades : 0;
+    let net = 0;
+    all.forEach((t, ix) => { if (ix >= cutIdx) net += (t.pnl || 0); });
+    const dd = window._lastMaxDD != null ? (+window._lastMaxDD).toFixed(1) : '?';
+    const el = document.getElementById('abcReadout');
+    if (el) el.textContent = P.label + ' (floor ' + P.lots + (P.cap ? ', cap $' + P.cap : ', NO CAP') + '): FINAL $' + Math.round(511 + net) + ' · n=' + n + ' · WR' + wr + '% · DD' + dd + '% (playback below)';
+    actLog('ok', 'lot preset ' + P.label + ': final $' + Math.round(511 + net) + ' n=' + n + ' WR' + wr + '%');
+    setTimeout(() => {
+        const closed = (allTrades || []).filter(t => t.status === 'closed');
+        if (!isPlaying && closed.length > 1 && currentTradeIndex < closed.length - 1) {
+            isPlaying = true;
+            const b = document.getElementById('btnPlay');
+            if (b) b.textContent = 'Pause';
+            animate();
+        }
+    }, 900);
+}
+
 // ABC PRESETS (user 2026-10-12): one click loads a full strategy onto
 // 2min full span and replays it. A = live bot as-pushed, B = sweep champ,
 // C = original classic. Rails (offsets/no-chase/setb/vantage/floor) stay
@@ -3259,7 +3306,8 @@ async function pushStrategy() {
         actLog('err', 'not pushed - EMA fast (' + cfg.ema_fast + ') must be below EMA slow (' + cfg.ema_slow + ')');
         return;
     }
-    if (!confirm('PUSH TO LIVE BOT?\n' + describeStrategy(cfg) + '\n\nThis overwrites the running bot config. Cancel keeps everything as-is.')) {
+    const lotWarn = (+cfg.base_lots || 0) > 0.5 ? '\n\nWARNING: base_lots ' + cfg.base_lots + ' sets the LIVE size cap to ' + Math.min(1, (+cfg.base_lots) * 10) + ' lots/trade (sim floor and live cap share a name only!)' : '';
+    if (!confirm('PUSH TO LIVE BOT?\n' + describeStrategy(cfg) + lotWarn + '\n\nThis overwrites the running bot config. Cancel keeps everything as-is.')) {
         actLog('info', 'push cancelled - live bot untouched');
         return;
     }
