@@ -337,6 +337,10 @@
                     <button class="btn btn-secondary" onclick="resetBest()">RESET TO BEST</button>
                     <button class="btn btn-secondary" id="btnTune" onclick="fineTune()" title="Grid-search EMA x RR x keep% on the current range, apply the winner">FINE-TUNE</button>                     <button class="btn btn-secondary" id="btnDeep" onclick="deepSweep()" title="Staged sweep on 2min 5/27: core x exits x vantage x guards, train/validate split, risk-adjusted rank, report only">DEEP SWEEP</button>
                     <button class="btn btn-primary" id="btnApply" onclick="applyStaged()" disabled style="opacity:0.45;" title="Apply staged input changes with a fresh run from trade 1">APPLIED &#10003;</button>
+                    <button class="btn btn-secondary" id="btnPresetA" onclick="applyPreset('A')" title="Load live-bot settings (ATR3.5 RR6 r3.5 1slot) on 2min full span and replay">A-LIVE</button>
+                    <button class="btn btn-secondary" id="btnPresetB" onclick="applyPreset('B')" title="Load sweep-champ settings (ATR1.25 RR6 r3 2slots) on 2min full span and replay">B-CHAMP</button>
+                    <button class="btn btn-secondary" id="btnPresetC" onclick="applyPreset('C')" title="Load original classic (ATR1 RR5 r5 3slots) on 2min full span and replay">C-CLASSIC</button>
+                    <span class="mono-line" id="abcReadout" style="flex:1 1 100%;color:#ffd700;"></span>
                     <button class="btn btn-success" onclick="heartbeatDemo()" title="Sine-wave heartbeat preset: XAUUSD 1M, sine-only, accel-flip exits, Oct 7 wave day">HEARTBEAT DEMO</button>
                     <span class="mono-line" id="liveStrategy" style="flex:1 1 100%;">
                         <span style="color:#ffffff;">RUNNING:</span> reading bot...
@@ -3171,6 +3175,55 @@ async function verifyBotHas(cfg, tries) {
         }
         return false;
     });
+}
+
+// ABC PRESETS (user 2026-10-12): one click loads a full strategy onto
+// 2min full span and replays it. A = live bot as-pushed, B = sweep champ,
+// C = original classic. Rails (offsets/no-chase/setb/vantage/floor) stay
+// as set - only the core differs, exactly like the measured comparison.
+const PRESETS = {
+    A: { label: 'A-LIVE (bot now)', rr: 6, atr: 3.5, risk: 3.5, slots: 1, pk: 2, keep: 30 },
+    B: { label: 'B-CHAMP', rr: 6, atr: 1.25, risk: 3, slots: 2, pk: 3, keep: 20 },
+    C: { label: 'C-CLASSIC', rr: 5, atr: 1.0, risk: 5, slots: 3, pk: 2, keep: 30 }
+};
+function applyPreset(k) {
+    const P = PRESETS[k];
+    if (!P) return;
+    currentSpeedProfile = '2min';
+    document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector('[data-speed="2min"]');
+    if (btn) btn.classList.add('active');
+    document.getElementById('rrRatio').value = P.rr;
+    document.getElementById('atrStop').value = P.atr;
+    document.getElementById('riskPct').value = P.risk;
+    document.getElementById('maxConcurrent').value = P.slots;
+    document.getElementById('baseLots').value = 0.45;
+    document.getElementById('givePeak').value = P.pk;
+    document.getElementById('giveKeepPct').value = P.keep;
+    document.getElementById('rangeFrom').value = '';
+    document.getElementById('rangeTo').value = '';
+    regenerate();
+    // instant final balance (no waiting for the playback to finish)
+    const all = allTrades || [];
+    const n = all.length;
+    const wr = n ? Math.round(100 * all.filter(t => t.isWin).length / n) : 0;
+    const bk = window._lastBanked || [];
+    const cutIdx = bk.length ? bk[bk.length - 1].trades : 0;
+    let net = 0;
+    all.forEach((t, ix) => { if (ix >= cutIdx) net += (t.pnl || 0); });
+    const dd = window._lastMaxDD != null ? (+window._lastMaxDD).toFixed(1) : '?';
+    const el = document.getElementById('abcReadout');
+    if (el) el.textContent = P.label + ': FINAL $' + Math.round(511 + net) + ' · n=' + n + ' · WR' + wr + '% · DD' + dd + '% (playback below)';
+    actLog('ok', 'preset ' + P.label + ' loaded: final $' + Math.round(511 + net) + ' n=' + n + ' WR' + wr + '%');
+    setTimeout(() => {
+        const closed = (allTrades || []).filter(t => t.status === 'closed');
+        if (!isPlaying && closed.length > 1 && currentTradeIndex < closed.length - 1) {
+            isPlaying = true;
+            const b = document.getElementById('btnPlay');
+            if (b) b.textContent = 'Pause';
+            animate();
+        }
+    }, 900);
 }
 
 async function pushStrategy() {
