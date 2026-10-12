@@ -1616,6 +1616,9 @@ LADDER_CFG_DEFAULTS = {
     "weights": [0.5, 0.3, 0.2],   # near layer takes the biggest slice
     "step_atr": 0.20,    # each deeper layer sits this x ATR further out
     "ttl_s": 300,        # unfilled layers live 5 min, then cancel cleanly
+    # user 2026-10-12: hunt-spaced layers - 2nd near the 1st stop, 3rd AT
+    # it (x stop_dist). When set with >= layers entries, replaces step_atr.
+    "offsets": None,
 }
 LADDER_CFG = dict(LADDER_CFG_DEFAULTS)
 LADDER_STATE = {"active": {}, "fills": 0, "cancels": 0}
@@ -2615,6 +2618,11 @@ def run_live(cfg):
                     wts.append(0.0)
                 step = float(lc.get("step_atr", 0.2)) * (
                     av3 if (av3 is not None and av3 > 0) else stop_dist)
+                offs = lc.get("offsets")
+                use_offs = isinstance(offs, (list, tuple)) and \
+                    len(offs) >= n_layers and all(
+                        isinstance(x, (int, float)) and not
+                        isinstance(x, bool) for x in offs[:n_layers])
                 ref = (tick_l.bid if direction == "LONG"
                        else tick_l.ask)
                 dm = float(cfg.get("disaster_stop_mult", 1.5))
@@ -2625,8 +2633,13 @@ def run_live(cfg):
                         continue
                     lots_i = max(sym_l.volume_min,
                                  round(lots_total * wi, 2))
-                    px_i = (ref - i * step) if direction == "LONG" \
-                        else (ref + i * step)
+                    if use_offs:
+                        px_i = (ref - float(offs[i]) * stop_dist) \
+                            if direction == "LONG" \
+                            else (ref + float(offs[i]) * stop_dist)
+                    else:
+                        px_i = (ref - i * step) if direction == "LONG" \
+                            else (ref + i * step)
                     if direction == "LONG":
                         px_i = min(px_i, tick_l.ask - 0.05)
                         if px_i >= tick_l.ask - 0.05:
