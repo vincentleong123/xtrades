@@ -314,7 +314,7 @@
                     <div class="input-group"><label>Ladder L1 %</label><input type="number" id="lw1" value="50" step="5" min="0" max="100" title="Layer weight % of signal size (normalized)"></div>
                     <div class="input-group"><label>Ladder L2 %</label><input type="number" id="lw2" value="30" step="5" min="0" max="100"></div>
                     <div class="input-group"><label>Ladder L3 %</label><input type="number" id="lw3" value="20" step="5" min="0" max="100"></div>
-                    <div class="chkrow"><input type="checkbox" id="vanOn" checked><label for="vanOn">Vantage reload (hunt-fade 4th)</label><span style="font-size:11px;color:#8b93a7;">delayed reserve near stop shelf + early scratch</span></div>
+                    <div class="chkrow"><input type="checkbox" id="vanOn"><label for="vanOn">Vantage reload (hunt-fade 4th)</label><span style="font-size:11px;color:#8b93a7;">delayed reserve near stop shelf + early scratch</span></div>
                     <div class="input-group"><label>Vantage delay s</label><input type="number" id="vanDelay" value="120" step="30" min="0" max="900" title="Park the reserve this long after the signal so the pullback develops"></div>
                     <div class="input-group"><label>Vantage ATR</label><input type="number" id="vanAtr" value="0.8" step="0.1" min="0.2" max="1.4" title="Reserve level sits this x ATR adverse of signal ref (inside the soft stop)"></div>
                     <div class="input-group"><label>Vantage size x</label><input type="number" id="vanFrac" value="0.3" step="0.1" min="0.1" max="1" title="Reserve size as fraction of signal lots"></div>
@@ -331,14 +331,14 @@
                 <div class="btnrow">
                     <button class="btn btn-primary" id="btnPushStrategy" onclick="pushStrategy()">PUSH TO BOT</button>
                     <button class="btn btn-secondary" onclick="resetBest()">RESET TO BEST</button>
-                    <button class="btn btn-secondary" id="btnTune" onclick="fineTune()" title="Grid-search EMA x RR x keep% on the current range, apply the winner">FINE-TUNE</button>
+                    <button class="btn btn-secondary" id="btnTune" onclick="fineTune()" title="Grid-search EMA x RR x keep% on the current range, apply the winner">FINE-TUNE</button>                     <button class="btn btn-secondary" id="btnDeep" onclick="deepSweep()" title="Staged sweep on 2min 5/27: core x exits x vantage x guards, train/validate split, risk-adjusted rank, report only">DEEP SWEEP</button>
                     <button class="btn btn-primary" id="btnApply" onclick="applyStaged()" disabled style="opacity:0.45;" title="Apply staged input changes with a fresh run from trade 1">APPLIED &#10003;</button>
                     <button class="btn btn-success" onclick="heartbeatDemo()" title="Sine-wave heartbeat preset: XAUUSD 1M, sine-only, accel-flip exits, Oct 7 wave day">HEARTBEAT DEMO</button>
                     <span class="mono-line" id="liveStrategy" style="flex:1 1 100%;">
                         <span style="color:#ffffff;">RUNNING:</span> reading bot...
                     </span>
                 </div>
-                <div class="resline" id="tuneResults" style="display:none;"></div>
+                <div class="resline" id="tuneResults" style="display:none;"></div>                 <div class="resline" id="deepResults" style="display:none;"></div>
                 <div class="resline" id="simNote">Mirror preset - follows the live file (now 1M) cross+GIVE engine, $500 base - refresh replays it</div>
             </div>
 
@@ -489,7 +489,7 @@ const TF_LABELS = { '1min':'1M', '2min':'2M', '3min':'3M', '5min':'5M', '15min':
 // ---- FIXED DEFAULTS: every refresh starts here (the measured-best settings) ----
 const DEFAULTS = { tf: '1min', emaFast: 5, emaSlow: 27, atrStop: 1, rrRatio: 5,
     riskPct: 5, maxConcurrent: 3, baseLots: 0.45, wickProof: true, disasterMult: 1.5, profitTarget: 100,
-    spreadPts: 34, exitEngine: true, givePeak: 2, giveKeepPct: 30, squeezeOn: false, squeezePct: 70, goalBalance: '', floorBalance: 400, crossOn: true, alignOn: false, fadeOn: false, reloadOn: false, fadeSpike: 2, fadeN: 20, vwapOn: false, vwapKEntry: 2, vwapKStop: 3, lw1: 50, lw2: 30, lw3: 20, sineOn: false, fibOn: false, fibN: 50, beatOn: false, tightTP: false, maxHold: 0, roundOn: false, fomoOn: false, fomoN: 4, vanOn: true, vanDelay: 120, vanAtr: 0.8, vanFrac: 0.3, vanScratch: 0.6, equityFloor: 400, autoTune: true, breakoutN: 15, breakevenR: 1 };
+    spreadPts: 34, exitEngine: true, givePeak: 2, giveKeepPct: 30, squeezeOn: false, squeezePct: 70, goalBalance: '', floorBalance: 400, crossOn: true, alignOn: false, fadeOn: false, reloadOn: false, fadeSpike: 2, fadeN: 20, vwapOn: false, vwapKEntry: 2, vwapKStop: 3, lw1: 50, lw2: 30, lw3: 20, sineOn: false, fibOn: false, fibN: 50, beatOn: false, tightTP: false, maxHold: 0, roundOn: false, fomoOn: false, fomoN: 4, vanOn: false, vanDelay: 120, vanAtr: 0.8, vanFrac: 0.3, vanScratch: 0.6, equityFloor: 400, autoTune: true, breakoutN: 15, breakevenR: 1 };
 
 let currentSpeedProfile = DEFAULTS.tf;
 let allTrades = [];
@@ -935,6 +935,7 @@ function simulateTrades(candles, p) {
     const opens = [];
     const pendings = [];   // live limit-ladder orders awaiting fill (TTL 300s)
     const vanSig = {};   // vantage reload records per parent sigId (scratch window)
+    const vanWait = {};   // staged reserves awaiting their delay (not yet in the book)
     let cancelled = 0;       // parked layers that TTL-expired unfilled
     let numSig = 0;
     let cycleNo = 1;             // journey cycles: bank the goal, restart at $500
@@ -1222,6 +1223,30 @@ function simulateTrades(candles, p) {
             }
         }
 
+        // VANTAGE reserve release: a staged bullet enters the book only
+        // once its delay has played out (mirrors live park-at-arm-time).
+        // Slot + hedge checked HERE, at release - never while waiting.
+        for (const sid in vanWait) {
+            const vw = vanWait[sid];
+            if (i < vw.availIdx) continue;
+            delete vanWait[sid];
+            if (i - vw.availIdx > 5) continue;   // stale, walk away
+            if (activeSigs() >= p.maxConcurrent) continue;
+            if (opens.some(o => o.direction !== vw.dir)) continue;
+            const vLevel = vw.dir === 'LONG' ? vw.entry - (p.vanAtr || 0.8) * vw.slDist : vw.entry + (p.vanAtr || 0.8) * vw.slDist;
+            const vLots = Math.max(0.01, r2((p.vanFrac || 0.3) * vw.lots));
+            const vFill = vLevel + (vw.dir === 'LONG' ? spreadPx : -spreadPx);
+            pendings.push({ sigId: vw.vSigId, direction: vw.dir, level: vLevel, createdT: c.t, createdIdx: i, availIdx: i, pos: {
+                sigId: vw.vSigId, direction: vw.dir, entryPrice: vFill, kind: 'vantage',
+                exitPrice: null, exitBalance: null, lots: vLots,
+                pnl: 0, pnlPct: 0, status: 'open', isWin: false,
+                sl: vw.dir === 'LONG' ? vFill - vw.slDist : vFill + vw.slDist,
+                hard: vw.dir === 'LONG' ? vFill - vw.slDist * (p.disasterMult || 1) : vFill + vw.slDist * (p.disasterMult || 1),
+                tp: vw.dir === 'LONG' ? vFill + vw.slDist * p.rrRatio : vFill - vw.slDist * p.rrRatio,
+                riskAmount: vw.risk, pk: 0, reason: ''
+            } });
+        }
+
         // ---- limit-ladder fills: live parks pullback layers (300s TTL on 1M
         // = 5 bars). TTL is counted in BARS so slower timeframes get the
         // same 5-bar patience instead of expiring inside one bar.
@@ -1317,26 +1342,16 @@ function simulateTrades(candles, p) {
                 }
             }
             // VANTAGE RELOAD (live: delayed 4th bullet near the stop shelf).
-            // The reserve LIMIT parks once the pullback has had time to
-            // develop (availIdx delay); the hunt fills it at a vantage
-            // price. Own sigId so it counts toward maxConcurrent like live.
-            if (p.vanOn && atr[i] && activeSigs() < p.maxConcurrent && !opens.some(o => o.direction !== dir)) {
+            // The reserve is STAGED here but enters the book only once its
+            // delay has played out (release loop below) - a waiting reserve
+            // must never clog signal slots. Own sigId reserved now so slot
+            // accounting matches live at release time.
+            if (p.vanOn && atr[i]) {
                 const vBarSecs = i > 0 ? Math.max(1, c.t - candles[i - 1].t) : 120;
                 const vBars = Math.max(1, Math.round((p.vanDelay || 0) / vBarSecs));
-                const vLevel = dir === 'LONG' ? entry - (p.vanAtr || 0.8) * atr[i] : entry + (p.vanAtr || 0.8) * atr[i];
-                const vLots = Math.max(0.01, r2((p.vanFrac || 0.3) * totalLots));
-                const vFill = vLevel + (dir === 'LONG' ? spreadPx : -spreadPx);
                 const vSig = ++numSig;
                 vanSig[sigId] = { dir: dir, ref: entry, slDist: slDist, bornIdx: i, scratched: false };
-                pendings.push({ sigId: vSig, direction: dir, level: vLevel, createdT: c.t, createdIdx: i + vBars, availIdx: i + vBars, pos: {
-                    sigId: vSig, direction: dir, entryPrice: vFill, kind: 'vantage',
-                    exitPrice: null, exitBalance: null, lots: vLots,
-                    pnl: 0, pnlPct: 0, status: 'open', isWin: false,
-                    sl: dir === 'LONG' ? vFill - slDist : vFill + slDist,
-                    hard: dir === 'LONG' ? vFill - slDist * (p.disasterMult || 1) : vFill + slDist * (p.disasterMult || 1),
-                    tp: dir === 'LONG' ? vFill + slDist * p.rrRatio : vFill - slDist * p.rrRatio,
-                    riskAmount: riskAmt, pk: 0, reason: ''
-                } });
+                vanWait[sigId] = { dir: dir, entry: entry, slDist: slDist, lots: totalLots, risk: riskAmt, availIdx: i + vBars, vSigId: vSig };
             }
         }
 
@@ -2501,6 +2516,146 @@ function resetBest() {
 // ---------- grid fine-tuner: EMA x RR x keep% on the current range ----------
 // runs simulateTrades headlessly (DOM untouched), applies the winner to the
 // inputs and recalcs so Play shows it. RESET TO BEST restores shipped defaults.
+async function deepSweep() {
+    // STAGED DEEP SWEEP (user 2026-10-12): EMA 5/27 fixed, 2min full span,
+    // $511 start. S1 core (RR x ATR-stop x risk x floor) -> S2 exits
+    // (GIVE peak x keep x disaster x wick) -> S3 vantage -> S4 guards.
+    // Train Sep29-Oct5, validate Oct6-9; score = net/maxDD (filters: 30+
+    // trades, DD<=35%). Report only - nothing is applied or pushed.
+    const box = document.getElementById('deepResults');
+    box.style.display = 'block';
+    setBusy('btnDeep', true);
+    const keepSpeed = currentSpeedProfile, keepFrom = document.getElementById('rangeFrom').value, keepTo = document.getElementById('rangeTo').value;
+    const restore = () => {
+        currentSpeedProfile = keepSpeed;
+        document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+        const b0 = document.querySelector('[data-speed="' + keepSpeed + '"]');
+        if (b0) b0.classList.add('active');
+        document.getElementById('rangeFrom').value = keepFrom;
+        document.getElementById('rangeTo').value = keepTo;
+        regenerate();
+    };
+    try {
+        currentSpeedProfile = '2min';
+        document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+        const b2 = document.querySelector('[data-speed="2min"]');
+        if (b2) b2.classList.add('active');
+        document.getElementById('rangeFrom').value = '';
+        document.getElementById('rangeTo').value = '';
+        regenerate();
+        const full = (priceCandles || []).slice();
+        if (full.length < 500) throw new Error('not enough 2min data (' + full.length + ' bars)');
+        const splitT = Date.UTC(2026, 9, 6, 0, 0, 0) / 1000;
+        let cut = full.findIndex(c => c.t >= splitT);
+        if (cut < 500 || cut > full.length - 500) cut = Math.floor(full.length * 0.6);
+        const train = full.slice(0, cut), val = full.slice(cut);
+        const base = readSimParams();
+        const START = 511;
+        const scoreOf = res => {
+            if (!res || !res.closed || res.closed.length < 30) return null;
+            if ((res.maxDD || 0) > 35) return null;
+            const net = res.finalBalance - START;
+            return { net: Math.round(net), dd: +res.maxDD.toFixed(1), n: res.closed.length, bal: Math.round(res.finalBalance), score: net / Math.max(2, res.maxDD) };
+        };
+        let done = 0, tag = '';
+        const rawOf = res => {
+            if (!res || !res.closed) return null;
+            const net = res.finalBalance - START;
+            return { net: Math.round(net), dd: +(res.maxDD || 0).toFixed(1), n: res.closed.length, bal: Math.round(res.finalBalance), score: net / Math.max(2, res.maxDD || 0) };
+        };
+        const runMany = async (candles, list, raw) => {
+            const out = [];
+            for (const over of list) {
+                const p = Object.assign({}, base, over, { emaFast: 5, emaSlow: 27, startBalance: START, floorBal: 400 });
+                let res = null;
+                try { res = simulateTrades(candles, p); } catch (e) { res = null; }
+                const s = raw ? rawOf(res) : scoreOf(res);
+                if (s) out.push({ over: over, s: s });
+                done++;
+                if (done % 4 === 0) { box.innerHTML = tag + ' ' + done + ' runs ...'; await new Promise(r2 => setTimeout(r2, 0)); }
+            }
+            return out.sort((a, b) => b.s.score - a.s.score);
+        };
+        const l1 = [];
+        for (const rr of [4, 5, 6]) for (const at of [0.8, 1, 1.25]) for (const rk of [3, 5, 7]) for (const fl of [0.17, 0.30, 0.45]) l1.push({ rrRatio: rr, atrStop: at, riskPct: rk, baseLots: fl });
+        done = 0; tag = 'S1 core';
+        const r1 = await runMany(train, l1);
+        if (!r1.length) throw new Error('S1 found nothing (30+ trades, DD<=35%)');
+        const top1 = r1.slice(0, 2).map(r => r.over);
+        const l2 = [];
+        for (const b1 of top1) for (const pk of [1.5, 2, 3]) for (const kp of [20, 30, 40]) for (const dm of [1.25, 1.5, 2]) for (const wk of [true, false]) l2.push(Object.assign({}, b1, { givePeak: pk, giveKeepPct: kp, disasterMult: dm, wickProof: wk }));
+        done = 0; tag = 'S2 exits';
+        const r2 = await runMany(train, l2);
+        if (!r2.length) throw new Error('S2 found nothing');
+        const top2 = r2.slice(0, 2).map(r => r.over);
+        const l3 = [];
+        for (const b2 of top2) {
+            l3.push(Object.assign({}, b2, { vanOn: false }));
+            for (const dl of [60, 120, 240]) for (const fr of [0.2, 0.3, 0.5]) l3.push(Object.assign({}, b2, { vanOn: true, vanDelay: dl, vanFrac: fr, vanScratch: 0.6 }));
+        }
+        done = 0; tag = 'S3 vantage';
+        const r3 = await runMany(train, l3);
+        if (!r3.length) throw new Error('S3 found nothing');
+        const champ3 = r3[0].over;
+        const l3b = [0.4, 0.6, 0.8].filter(x => x !== (champ3.vanScratch == null ? 0.6 : champ3.vanScratch)).map(x => Object.assign({}, champ3, { vanScratch: x }));
+        done = 0; tag = 'S3b scratch';
+        const r3b = await runMany(train, l3b);
+        const top3 = (r3b.length && r3b[0].s.score > r3[0].s.score) ? [r3b[0].over, champ3] : [champ3, (r3[1] || r3[0]).over];
+        const l4 = [];
+        for (const b3 of top3) for (const mh of [0, 90, 180]) for (const mc of [2, 3]) l4.push(Object.assign({}, b3, { maxHold: mh, maxConcurrent: mc }));
+        done = 0; tag = 'S4 guards';
+        const r4 = await runMany(train, l4);
+        if (!r4.length) throw new Error('S4 found nothing');
+        done = 0; tag = 'validate';
+        // wider net: finalists plus S1-diverse completions (different core,
+        // champ exits/vantage/guards) so one strong week can't hide a survivor
+        const dimsOf = (o, ks) => { const d = {}; ks.forEach(k => { if (o[k] !== undefined) d[k] = o[k]; }); return d; };
+        const exK = ['givePeak', 'giveKeepPct', 'disasterMult', 'wickProof'];
+        const vnK = ['vanOn', 'vanDelay', 'vanFrac', 'vanScratch'];
+        const gdK = ['maxHold', 'maxConcurrent'];
+        const valSet = l4.slice();
+        const seen = new Set(l4.map(o => JSON.stringify(o)));
+        const exC = dimsOf(r2[0].over, exK), vnC = dimsOf(r3[0].over, vnK), gdC = dimsOf((r4[0] || r3[0]).over, gdK);
+        for (const r of r1.slice(2, 6)) {
+            const o = Object.assign({}, r.over, exC, vnC, gdC);
+            const k = JSON.stringify(o);
+            if (!seen.has(k)) { seen.add(k); valSet.push(o); }
+        }
+        const rv = await runMany(val, valSet);
+        const trainByKey = {};
+        r4.forEach(r => { trainByKey[JSON.stringify(r.over)] = r.s; });
+        valSet.forEach(o => {
+            const k = JSON.stringify(o);
+            if (!trainByKey[k]) {
+                const hit = r1.concat(r2, r3).find(r => JSON.stringify(Object.assign({}, r.over, exC, vnC, gdC)) === k);
+                if (hit) trainByKey[k] = hit.s;
+            }
+        });
+        const ranked = rv.map(r => ({ over: r.over, v: r.s, t: trainByKey[JSON.stringify(r.over)] })).filter(r => r.t).sort((a, b) => b.v.score - a.v.score);
+        const fmt = o => 'RR' + o.rrRatio + ' ATR' + o.atrStop + ' risk' + o.riskPct + '% floor' + o.baseLots + ' pk' + o.givePeak + ' keep' + o.giveKeepPct + ' dis' + o.disasterMult + (o.wickProof ? '' : ' NOWICK') + (o.vanOn ? ' VAN' + o.vanDelay + 's/' + o.vanFrac + '/scr' + (o.vanScratch == null ? 0.6 : o.vanScratch) : ' NOVAN') + ' hold' + o.maxHold + ' slots' + o.maxConcurrent;
+        if (!ranked.length) {
+            // graceful: validate shredded everything - report train champion
+            // plus the toughest validator (lowest DD, unfiltered) as evidence
+            const rawV = await runMany(val, valSet, true);
+            rawV.sort((a, b) => a.s.dd - b.s.dd);
+            const toughest = rawV[0];
+            const tc = r4[0];
+            const fmt2 = o => 'RR' + o.rrRatio + ' ATR' + o.atrStop + ' risk' + o.riskPct + '% floor' + o.baseLots;
+            box.innerHTML = 'DEEP SWEEP: no config survived validate under DD&lt;=35% (train had ' + r1.length + ' qualifiers).<br><br><b>TRAIN CHAMPION: ' + fmt(tc.over) + ' &rarr; train $' + tc.s.bal + ' (n=' + tc.s.n + ' DD' + tc.s.dd + '%)</b><br>TOUGHEST VALIDATOR (lowest DD, unfiltered): ' + fmt2(toughest.over) + ' &rarr; val $' + toughest.s.bal + ' (n=' + toughest.s.n + ' DD' + toughest.s.dd + '%)<br><br>Read: the Oct6-9 regime kills this family - consider lower risk, vantage off, or wider stops. Report only - nothing applied.';
+            actLog('warn', 'deep sweep: validate shredded all ' + valSet.length + ' configs; train champion reported');
+        } else {
+        const ch = ranked[0];
+        box.innerHTML = 'DEEP SWEEP done (' + full.length + ' bars; train ' + train.length + ' / val ' + val.length + ', $511 start):<br><br><b>CHAMPION (val score ' + ch.v.score.toFixed(1) + '): ' + fmt(ch.over) + '<br>train $' + ch.t.bal + ' (n=' + ch.t.n + ' DD' + ch.t.dd + '%) &rarr; validate $' + ch.v.bal + ' (n=' + ch.v.n + ' DD' + ch.v.dd + '%)</b><br><br>' + ranked.slice(1, 6).map((r, ix) => '#' + (ix + 2) + ' ' + fmt(r.over) + ' &rarr; val $' + r.v.bal + ' (DD' + r.v.dd + '% n=' + r.v.n + ') / train $' + r.t.bal).join('<br>') + '<br><br>report only - nothing applied. PUSH by hand if you want it live.';
+        actLog('ok', 'deep sweep done: champion validate $' + ch.v.bal + ' (DD ' + ch.v.dd + '%)');
+        }
+    } catch (e) {
+        box.innerHTML = 'deep sweep failed: ' + (e && e.message ? e.message : e);
+        actLog('err', 'deep sweep failed: ' + (e && e.message ? e.message : e));
+    }
+    restore();
+    setBusy('btnDeep', false);
+}
+
 async function fineTune() {
     const box = document.getElementById('tuneResults');
     if (!priceCandles.length || priceCandles.length < 60) { actLog('err', 'fine-tune needs data first'); return; }
