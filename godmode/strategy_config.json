@@ -9,7 +9,7 @@
   "rr_ratio": 6,
   "risk_pct": 3.5,
   "base_lots": 0.45,
-  "max_concurrent": 1,
+  "max_concurrent": 2,
   "wick_proof_stop": true,
   "disaster_stop_mult": 1.5,
   "profit_target_usd": 100,
