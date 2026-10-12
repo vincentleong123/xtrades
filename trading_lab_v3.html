@@ -246,7 +246,7 @@
                 <div>
                     <h1 id="cockpitTitle">XAUUSD COCKPIT</h1>
                     <p id="liveStatus" style="color:#8fd3ff; font-size:12px; margin-top:2px;">connecting to bridge...</p>
-                    <div class="defaults-sub" id="defaultsSub">refresh: sim mirrors the RUNNING bot (TF, EMA, stops, risk, exits, ladder) &middot; last 8 trade days</div>
+                    <div class="defaults-sub" id="defaultsSub">refresh: sim mirrors the RUNNING bot (TF, EMA, stops, risk, exits, ladder) · today's MY tape &middot; last 8 trade days</div>
                 </div>
             <div class="btnrow">
                 <button class="btn btn-success" id="btnStartBot" onclick="startBot()">START BOT</button>
@@ -3749,7 +3749,7 @@ setDataSource('usd');
             num('equityFloor', c.equity_floor_usd);
         }
         regenerate();
-        octPreset();
+        todayPreset();
         // AUTO-PLAYBACK (user 2026-10-12): refresh replays history hands-free
         setTimeout(() => {
             const closed = (allTrades || []).filter(t => t.status === 'closed');
@@ -3768,20 +3768,22 @@ setDataSource('usd');
 })();
 // HEARTBEAT PRESET: slice the backtest to the 7 Oct wave day ($500 start)
 // so refresh = replay your screenshot window, no tinkering.
-function octPreset() {
+function todayPreset() {
     if (!masterCandles.length) return;
-    // default window: Sep 30 -> latest bar (user practice window);
-    // under 1000 bars -> full span (a practice run needs data to chew).
-    // (Clicking a TF button always loads its full span.)
-    let t0 = null;
+    // MALAYSIA DAY (user 2026-10-12): refresh opens strictly on today's
+    // tape - MYT 00:00 -> latest bar, everything loaded, no tinkering.
+    // Falls back to full span when today's bars aren't in the timeframe.
+    const nowMs = Date.now();
+    const myt = new Date(nowMs + 8 * 3600 * 1000);
+    const t0 = Math.floor(Date.UTC(myt.getUTCFullYear(), myt.getUTCMonth(), myt.getUTCDate()) / 1000) - 8 * 3600;
     const t1 = masterCandles[masterCandles.length - 1].t;
+    let first = -1;
     for (let i = 0; i < masterCandles.length; i++) {
-        if (fmtKLDate(masterCandles[i].t) >= '2026-09-30') { t0 = masterCandles[i].t; break; }
+        if (masterCandles[i].t >= t0) { first = i; break; }
     }
-    const spanN = t0 == null ? 0 : masterCandles.filter(c => c.t >= t0).length;
     const f = document.getElementById('rangeFrom');
     const tt = document.getElementById('rangeTo');
-    if (t0 != null && spanN >= 1000 && f && tt) { f.value = toInputValue(t0); tt.value = toInputValue(t1); }
+    if (first >= 0 && f && tt) { f.value = toInputValue(masterCandles[first].t); tt.value = toInputValue(t1); }
     else if (f && tt) { f.value = ''; tt.value = ''; }
     applyRange();
 }
