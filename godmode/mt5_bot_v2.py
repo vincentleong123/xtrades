@@ -1622,6 +1622,11 @@ LADDER_CFG_DEFAULTS = {
     # user 2026-10-12: hunt-spaced layers - 2nd near the 1st stop, 3rd AT
     # it (x stop_dist). When set with >= layers entries, replaces step_atr.
     "offsets": None,
+    # user 2026-10-12: layer 1 is the chase layer - parked at touch,
+    # repegged until filled (LIMIT, never market). Layers 2-3 stay back.
+    "chase_on": True,
+    "chase_ttl_s": 25,     # re-park layer 1 if unfilled this long
+    "chase_max_atr": 0.5,  # stop chasing beyond this x stop from orig ref
 }
 LADDER_CFG = dict(LADDER_CFG_DEFAULTS)
 LADDER_STATE = {"active": {}, "fills": 0, "cancels": 0}
@@ -2256,6 +2261,57 @@ def run_live(cfg):
                               f"spread captured")
                         continue
                     age2 = time.time() - float(ld2.get("born", time.time()))
+                    if ld2.get("layer") == 1 and ld2.get("chase") and age2 > float(LADDER_CFG.get("chase_ttl_s", 25) or 0):
+                        # CHASE repeg: cancel + re-park layer 1 at the new
+                        # touch until filled. Bounded twice: never follow
+                        # beyond chase_max_atr adverse of orig ref (no
+                        # vertical chase), never past the ladder TTL window.
+                        _cborn = float(ld2.get("oborn", ld2.get("born", time.time())))
+                        if time.time() - _cborn > float(LADDER_CFG.get("ttl_s", 300) or 0):
+                            _rc0 = mt5.order_send({"action": mt5.TRADE_ACTION_REMOVE, "order": ot2})
+                            if _rc0 and _rc0.retcode == mt5.TRADE_RETCODE_DONE:
+                                LADDER_STATE["active"].pop(ot2, None)
+                                print(f"[ladder] chase layer #{ot2} window over (no fill)")
+                            continue
+                        _tkc = mt5.symbol_info_tick(cfg["symbol"])
+                        if _tkc is None:
+                            continue
+                        _cdr = ld2["dir"]
+                        _nlvl = (_tkc.ask - 0.05) if _cdr == "LONG" else (_tkc.bid + 0.05)
+                        _sdc = float(ld2.get("sd", 0) or 0)
+                        _maxd = float(LADDER_CFG.get("chase_max_atr", 0.5) or 0) * _sdc
+                        _drift = ((_nlvl - ld2.get("orig", _nlvl)) if _cdr == "LONG" else (ld2.get("orig", _nlvl) - _nlvl))
+                        if _sdc > 0 and _drift > _maxd:
+                            print(f"[ladder] chase layer #{ot2} ran too far ({_drift:.2f} > {_maxd:.2f}) - standing down")
+                            _rc1 = mt5.order_send({"action": mt5.TRADE_ACTION_REMOVE, "order": ot2})
+                            if _rc1 and _rc1.retcode == mt5.TRADE_RETCODE_DONE:
+                                LADDER_STATE["active"].pop(ot2, None)
+                            continue
+                        _rc2 = mt5.order_send({"action": mt5.TRADE_ACTION_REMOVE, "order": ot2})
+                        if not (_rc2 and _rc2.retcode == mt5.TRADE_RETCODE_DONE):
+                            continue   # still parked: retry next cycle
+                        LADDER_STATE["active"].pop(ot2, None)
+                        _dmc = float(cfg.get("disaster_stop_mult", 1.5))
+                        _slc = (_nlvl - _sdc * _dmc) if _cdr == "LONG" else (_nlvl + _sdc * _dmc)
+                        _rrc = float(ld2.get("rr", cfg.get("rr_ratio", 5)) or 5)
+                        _tpc = (_nlvl + _sdc * _rrc) if _cdr == "LONG" else (_nlvl - _sdc * _rrc)
+                        _otc = mt5.ORDER_TYPE_BUY_LIMIT if _cdr == "LONG" else mt5.ORDER_TYPE_SELL_LIMIT
+                        _rvl = mt5.order_send({"action": mt5.TRADE_ACTION_PENDING, "symbol": cfg["symbol"],
+                                               "volume": float(ld2.get("lots", 0.01) or 0.01), "type": _otc,
+                                               "price": round(_nlvl, 2), "deviation": 30,
+                                               "sl": round(_slc, 2), "tp": round(_tpc, 2), "magic": magic,
+                                               "comment": "LAD1", "type_time": mt5.ORDER_TIME_GTC,
+                                               "type_filling": fill_mode})
+                        if _rvl and _rvl.retcode == mt5.TRADE_RETCODE_DONE:
+                            _otv = getattr(_rvl, "order", 0)
+                            if _otv:
+                                LADDER_STATE["active"][_otv] = {
+                                    "dir": _cdr, "born": time.time(), "oborn": _cborn,
+                                    "level": _nlvl, "sl": _slc, "tp": _tpc,
+                                    "layer": 1, "chase": True, "orig": ld2.get("orig", _nlvl),
+                                    "sd": _sdc, "rr": _rrc, "lots": float(ld2.get("lots", 0.01) or 0.01)}
+                                print(f"[ladder] chase repeg #{_otv} @ {_nlvl:.2f} (followed touch)")
+                        continue
                     if age2 > LADDER_CFG.get("ttl_s", 300):
                         rl = mt5.order_send(
                             {"action": mt5.TRADE_ACTION_REMOVE, "order": ot2})
@@ -2637,14 +2693,25 @@ def run_live(cfg):
                         continue
                     lots_i = max(sym_l.volume_min,
                                  round(lots_total * wi, 2))
-                    if use_offs:
+                    _chase1 = (i == 0 and lc.get("chase_on", True))
+                    if _chase1:
+                        # CHASE LAYER: nearly-market LIMIT at touch - inside
+                        # the spread, fills on any kiss. Repegged by the
+                        # lifecycle until filled (never a market order).
+                        if direction == "LONG":
+                            px_i = tick_l.ask - 0.05
+                        else:
+                            px_i = tick_l.bid + 0.05
+                    elif use_offs:
                         px_i = (ref - float(offs[i]) * stop_dist) \
                             if direction == "LONG" \
                             else (ref + float(offs[i]) * stop_dist)
                     else:
                         px_i = (ref - i * step) if direction == "LONG" \
                             else (ref + i * step)
-                    if direction == "LONG":
+                    if _chase1:
+                        pass   # chase layer parks at touch by construction
+                    elif direction == "LONG":
                         px_i = min(px_i, tick_l.ask - 0.05)
                         if px_i >= tick_l.ask - 0.05:
                             continue
@@ -2679,8 +2746,11 @@ def run_live(cfg):
                         if ot_l:
                             LADDER_STATE["active"][ot_l] = {
                                 "dir": direction, "born": time.time(),
+                                "oborn": time.time(),
                                 "level": px_i, "sl": sl_b, "tp": tp_i,
-                                "layer": i + 1}
+                                "layer": i + 1, "chase": bool(_chase1),
+                                "orig": ref, "sd": stop_dist, "rr": rr_u,
+                                "lots": lots_i}
                             placed += 1
                     else:
                         rc_l = res_l.retcode if res_l else "None"

@@ -72,7 +72,10 @@
       0.2,
       0.4,
       0.6
-    ]
+    ],
+    "chase_on": true,
+    "chase_ttl_s": 25,
+    "chase_max_atr": 0.5
   },
   "vantage": {
     "on": false,

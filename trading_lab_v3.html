@@ -315,6 +315,8 @@
                     <div class="input-group"><label>Ladder L2 %</label><input type="number" id="lw2" value="30" step="5" min="0" max="100"></div>
                     <div class="input-group"><label>Ladder L3 %</label><input type="number" id="lw3" value="20" step="5" min="0" max="100"></div>
                     <div class="input-group"><label>Ladder offsets</label><input type="text" id="ladderOffsets" value="0.2,0.4,0.6" style="width:90px;" title="Layer spacing as x stop-distance, comma separated. Pullback-only (no at-market layer) tests best - never chase"></div>
+                    <div class="input-group"><label>Chase TTL s</label><input type="number" id="chaseTtl" value="25" step="5" min="5" max="120" title="Live: re-park layer 1 at touch if unfilled this long"></div>
+                    <div class="input-group"><label>Chase max x</label><input type="number" id="chaseMax" value="0.5" step="0.1" min="0.2" max="2" title="Live: stop chasing beyond this x stop from orig ref"></div>
                     <div class="chkrow"><input type="checkbox" id="vanOn"><label for="vanOn">Vantage reload (hunt-fade 4th)</label><span style="font-size:11px;color:#8b93a7;">delayed reserve near stop shelf + early scratch</span></div>
                     <div class="input-group"><label>Vantage delay s</label><input type="number" id="vanDelay" value="120" step="30" min="0" max="900" title="Park the reserve this long after the signal so the pullback develops"></div>
                     <div class="input-group"><label>Vantage ATR</label><input type="number" id="vanAtr" value="0.8" step="0.1" min="0.2" max="1.4" title="Reserve level sits this x ATR adverse of signal ref (inside the soft stop)"></div>
@@ -497,7 +499,7 @@ const TF_LABELS = { '1min':'1M', '2min':'2M', '3min':'3M', '5min':'5M', '15min':
 // ---- FIXED DEFAULTS: every refresh starts here (the measured-best settings) ----
 const DEFAULTS = { tf: '1min', emaFast: 5, emaSlow: 27, atrStop: 1.25, rrRatio: 6,
     riskPct: 3, maxConcurrent: 2, baseLots: 0.45, wickProof: true, disasterMult: 1.5, profitTarget: 100,
-    spreadPts: 34, exitEngine: true, givePeak: 3, giveKeepPct: 20, squeezeOn: false, squeezePct: 70, goalBalance: '', floorBalance: 400, crossOn: true, alignOn: false, fadeOn: false, reloadOn: false, fadeSpike: 2, fadeN: 20, vwapOn: false, vwapKEntry: 2, vwapKStop: 3, lw1: 50, lw2: 30, lw3: 20, sineOn: false, fibOn: false, fibN: 50, beatOn: false, tightTP: false, maxHold: 0, roundOn: false, fomoOn: false, fomoN: 4, vanOn: false, vanDelay: 120, vanAtr: 0.8, vanFrac: 0.3, vanScratch: 0.6, equityFloor: 400, autoTune: true, breakoutN: 15, breakevenR: 1, ladderOffsets: '0.2,0.4,0.6', nochaseOn: true, nochaseAtr: 2.5, setbOn: true };
+    spreadPts: 34, exitEngine: true, givePeak: 3, giveKeepPct: 20, squeezeOn: false, squeezePct: 70, goalBalance: '', floorBalance: 400, crossOn: true, alignOn: false, fadeOn: false, reloadOn: false, fadeSpike: 2, fadeN: 20, vwapOn: false, vwapKEntry: 2, vwapKStop: 3, lw1: 50, lw2: 30, lw3: 20, sineOn: false, fibOn: false, fibN: 50, beatOn: false, tightTP: false, maxHold: 0, roundOn: false, fomoOn: false, fomoN: 4, vanOn: false, vanDelay: 120, vanAtr: 0.8, vanFrac: 0.3, vanScratch: 0.6, equityFloor: 400, autoTune: true, breakoutN: 15, breakevenR: 1, ladderOffsets: '0.2,0.4,0.6', chaseTtl: 25, chaseMax: 0.5, nochaseOn: true, nochaseAtr: 2.5, setbOn: true };
 
 let currentSpeedProfile = DEFAULTS.tf;
 let allTrades = [];
@@ -1358,12 +1360,11 @@ function simulateTrades(candles, p) {
                     tp: dir === 'LONG' ? fill + slDist * p.rrRatio : fill - slDist * p.rrRatio,
                     riskAmount: riskAmt, pk: 0, reason: ''
                 };
-                if (k === 0) {
-                    num++;
-                    opens.push(Object.assign(pos, { num: num, candleIdx: i, entryTime: c.t, entryBalance: balance, cycle: cycleNo, spreadPaid: pos.lots * 100 * spreadPx }));
-                } else {
-                    pendings.push({ sigId: sigId, direction: dir, level: level, createdT: c.t, pos: pos });
-                }
+                // CHASE mirror (live: layer 1 hugs touch via repeg loop). No
+                // instant fills here either - layer 0 waits for the touch
+                // like every layer; untouched = TTL-cancelled. Matches the
+                // live fill-or-expire distribution without modeling the loop.
+                pendings.push({ sigId: sigId, direction: dir, level: level, createdT: c.t, pos: pos });
             }
             // VANTAGE RELOAD (live: delayed 4th bullet near the stop shelf).
             // The reserve is STAGED here but enters the book only once its
@@ -2557,7 +2558,7 @@ function resetBest() {
     document.getElementById('vwapKStop').value = DEFAULTS.vwapKStop;
     document.getElementById('lw1').value = DEFAULTS.lw1;
     document.getElementById('lw2').value = DEFAULTS.lw2;
-    document.getElementById('lw3').value = DEFAULTS.lw3;     document.getElementById('vanOn').checked = DEFAULTS.vanOn;     document.getElementById('vanDelay').value = DEFAULTS.vanDelay;     document.getElementById('vanAtr').value = DEFAULTS.vanAtr;     document.getElementById('vanFrac').value = DEFAULTS.vanFrac;     document.getElementById('vanScratch').value = DEFAULTS.vanScratch;     document.getElementById('autoTune').checked = DEFAULTS.autoTune;     document.getElementById('equityFloor').value = DEFAULTS.equityFloor;     document.getElementById('breakoutN').value = DEFAULTS.breakoutN;     document.getElementById('breakevenR').value = DEFAULTS.breakevenR;     document.getElementById('ladderOffsets').value = DEFAULTS.ladderOffsets;     document.getElementById('nochaseOn').checked = DEFAULTS.nochaseOn;     document.getElementById('nochaseAtr').value = DEFAULTS.nochaseAtr;     document.getElementById('setbOn').checked = DEFAULTS.setbOn;
+    document.getElementById('lw3').value = DEFAULTS.lw3;     document.getElementById('vanOn').checked = DEFAULTS.vanOn;     document.getElementById('vanDelay').value = DEFAULTS.vanDelay;     document.getElementById('vanAtr').value = DEFAULTS.vanAtr;     document.getElementById('vanFrac').value = DEFAULTS.vanFrac;     document.getElementById('vanScratch').value = DEFAULTS.vanScratch;     document.getElementById('autoTune').checked = DEFAULTS.autoTune;     document.getElementById('equityFloor').value = DEFAULTS.equityFloor;     document.getElementById('breakoutN').value = DEFAULTS.breakoutN;     document.getElementById('breakevenR').value = DEFAULTS.breakevenR;     document.getElementById('ladderOffsets').value = DEFAULTS.ladderOffsets;     document.getElementById('chaseTtl').value = DEFAULTS.chaseTtl;     document.getElementById('chaseMax').value = DEFAULTS.chaseMax;     document.getElementById('nochaseOn').checked = DEFAULTS.nochaseOn;     document.getElementById('nochaseAtr').value = DEFAULTS.nochaseAtr;     document.getElementById('setbOn').checked = DEFAULTS.setbOn;
     document.getElementById('crossOn').checked = DEFAULTS.crossOn;
     document.getElementById('alignOn').checked = DEFAULTS.alignOn;
     document.getElementById('goalBalance').value = DEFAULTS.goalBalance;
@@ -3147,7 +3148,7 @@ function collectStrategy() {
         auto_tune: document.getElementById('autoTune').checked,
         exit_engine: { on: document.getElementById('exitEngine').checked },
         gates: { breakout_n: +document.getElementById('breakoutN').value || 0, breakeven_r: +document.getElementById('breakevenR').value || 0 },
-        limit_ladder: { weights: [+document.getElementById('lw1').value || 50, +document.getElementById('lw2').value || 30, +document.getElementById('lw3').value || 20], offsets: String(document.getElementById('ladderOffsets').value || '0,0.8,1').split(',').map(Number).filter(isFinite) },
+        limit_ladder: { weights: [+document.getElementById('lw1').value || 50, +document.getElementById('lw2').value || 30, +document.getElementById('lw3').value || 20], offsets: String(document.getElementById('ladderOffsets').value || '0.2,0.4,0.6').split(',').map(Number).filter(isFinite), chase_on: true, chase_ttl_s: +document.getElementById('chaseTtl').value || 25, chase_max_atr: +document.getElementById('chaseMax').value || 0.5 },
         nochase: { on: document.getElementById('nochaseOn').checked, pre_atr: +document.getElementById('nochaseAtr').value || 2.5 },
         setb: { on: document.getElementById('setbOn').checked, scout_lots: 0.01, fade_lots: 0.03, sl_r: 1.0, scout_tp_r: 1.0, fade_tp_r: 4.0 }
     };
