@@ -14,9 +14,18 @@
   "disaster_stop_mult": 1.5,
   "profit_target_usd": 100,
   "equity_floor_usd": 400,
-  "nochase": {"on": true, "pre_atr": 2.5},
-  "setb": {"on": true, "scout_lots": 0.01, "fade_lots": 0.03,
-           "sl_r": 1.0, "scout_tp_r": 1.0, "fade_tp_r": 4.0},
+  "nochase": {
+    "on": true,
+    "pre_atr": 2.5
+  },
+  "setb": {
+    "on": true,
+    "scout_lots": 0.01,
+    "fade_lots": 0.03,
+    "sl_r": 1.0,
+    "scout_tp_r": 1.0,
+    "fade_tp_r": 4.0
+  },
   "entry_mode": "cross",
   "mission_hours": 0,
   "time_stop_s": 0,
@@ -59,7 +68,11 @@
     ],
     "step_atr": 0.2,
     "ttl_s": 300,
-    "offsets": [0, 0.8, 1.0]
+    "offsets": [
+      0.2,
+      0.4,
+      0.6
+    ]
   },
   "vantage": {
     "on": false,
