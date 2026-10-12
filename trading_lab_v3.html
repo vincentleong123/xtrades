@@ -246,7 +246,7 @@
                 <div>
                     <h1 id="cockpitTitle">XAUUSD COCKPIT</h1>
                     <p id="liveStatus" style="color:#8fd3ff; font-size:12px; margin-top:2px;">connecting to bridge...</p>
-                    <div class="defaults-sub" id="defaultsSub">refresh: TF mirrors RUNNING bot &middot; EMA 5/27 &middot; x1.25 &middot; RR6 &middot; risk 3% &middot; max 2 &middot; wick on &middot; dis 1.5 &middot; last 8 trade days</div>
+                    <div class="defaults-sub" id="defaultsSub">refresh: sim mirrors the RUNNING bot (TF, EMA, stops, risk, exits, ladder) &middot; last 8 trade days</div>
                 </div>
             <div class="btnrow">
                 <button class="btn btn-success" id="btnStartBot" onclick="startBot()">START BOT</button>
@@ -3609,13 +3609,63 @@ setDataSource('usd');
 // if the bridge/bot is unreachable.
 (function bootMirror() {
     let done = false;
-    const go = tf => {
+    const go = s => {
         if (done) return; done = true;
+        const c = (s && s.config) || null;
+        const tf = c && c.timeframe;
         if (tf && document.querySelector('[data-speed="' + tf + '"]')) {
             currentSpeedProfile = tf;
             document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
             const btn = document.querySelector('[data-speed="' + tf + '"]');
             if (btn) btn.classList.add('active');
+        }
+        if (c) {
+            // FULL LIVE MIRROR (user 2026-10-12): refresh opens on the
+            // RUNNING bot's whole strategy for playback, not research
+            // defaults. Deliberately NOT mirrored: sim-only knobs (floor
+            // $400 ruin-stop, spread, start balance, $20 cap) and baseLots
+            // (live = cap base, sim = min floor - same name, opposite job).
+            const num = (id, v) => {
+                const el = document.getElementById(id);
+                if (el && v != null && isFinite(+v)) el.value = +v;
+            };
+            const chk = (id, v) => {
+                const el = document.getElementById(id);
+                if (el) el.checked = !!v;
+            };
+            num('emaFast', c.ema_fast); num('emaSlow', c.ema_slow);
+            num('atrStop', c.atr_stop_mult); num('rrRatio', c.rr_ratio);
+            num('riskPct', c.risk_pct); num('maxConcurrent', c.max_concurrent);
+            num('disasterMult', c.disaster_stop_mult);
+            num('profitTarget', c.profit_target_usd);
+            chk('wickProof', c.wick_proof_stop);
+            chk('exitEngine', c.exit_engine && c.exit_engine.on);
+            if (c.exit_engine) {
+                num('givePeak', c.exit_engine.min_peak);
+                if (c.exit_engine.retrace_pct != null && isFinite(+c.exit_engine.retrace_pct)) {
+                    const el = document.getElementById('giveKeepPct');
+                    if (el) el.value = 100 - (+c.exit_engine.retrace_pct);
+                }
+            }
+            const g = c.gates || {};
+            num('breakoutN', g.breakout_n); num('breakevenR', g.breakeven_r);
+            const ll = c.limit_ladder || {};
+            if (Array.isArray(ll.weights)) {
+                ['lw1', 'lw2', 'lw3'].forEach((id, ix) => num(id, ll.weights[ix]));
+            }
+            if (Array.isArray(ll.offsets)) {
+                const el = document.getElementById('ladderOffsets');
+                if (el) el.value = ll.offsets.join(',');
+            }
+            num('chaseTtl', ll.chase_ttl_s); num('chaseMax', ll.chase_max_atr);
+            const vn = c.vantage || {};
+            chk('vanOn', vn.on);
+            num('vanDelay', vn.delay_s); num('vanFrac', vn.size_frac); num('vanScratch', vn.scratch_trig_atr);
+            const nc = c.nochase || {};
+            chk('nochaseOn', nc.on); num('nochaseAtr', nc.pre_atr);
+            chk('setbOn', (c.setb || {}).on);
+            chk('autoTune', c.auto_tune);
+            num('equityFloor', c.equity_floor_usd);
         }
         regenerate();
         octPreset();
@@ -3632,7 +3682,7 @@ setDataSource('usd');
     };
     setTimeout(() => go(null), 2500);
     try {
-        bridgeFetch('/api/status').then(s => go(s && s.config && s.config.timeframe)).catch(() => go(null));
+        bridgeFetch('/api/status').then(s => go(s)).catch(() => go(null));
     } catch (e) { go(null); }
 })();
 // HEARTBEAT PRESET: slice the backtest to the 7 Oct wave day ($500 start)
