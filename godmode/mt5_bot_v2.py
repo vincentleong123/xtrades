@@ -1619,6 +1619,17 @@ LADDER_CFG_DEFAULTS = {
 }
 LADDER_CFG = dict(LADDER_CFG_DEFAULTS)
 LADDER_STATE = {"active": {}, "fills": 0, "cancels": 0}
+VANTAGE_CFG_DEFAULTS = {
+    "on": True,          # delayed 4th bullet near the stop shelf
+    "delay_s": 120,      # let the pullback develop before parking it
+    "price_atr": 0.8,    # reserve sits this x ATR adverse of signal ref
+    "size_frac": 0.3,    # of the signal's total lots (one light bullet)
+    "ttl_s": 300,        # unfilled reserve cancels like a layer
+    "scratch_trig_atr": 0.6,   # pump toward stops that scratches layers
+    "scratch_within_s": 180,   # ...only this soon after the signal
+}
+VANTAGE_CFG = dict(VANTAGE_CFG_DEFAULTS)
+VANTAGE_STATE = {"scheduled": None, "order": None, "scratched_sig": None}
 
 
 def _streak_best(seq, sign):
@@ -2064,10 +2075,13 @@ def run_live(cfg):
                     _fh.dump_traceback_later(180)
             except Exception:
                 pass
-            # LADDER config hot-reloads with cfg every cycle (no restart)
+            # LADDER + VANTAGE config hot-reload with cfg every cycle
             LADDER_CFG.clear()
             LADDER_CFG.update(LADDER_CFG_DEFAULTS)
             LADDER_CFG.update(cfg.get("limit_ladder") or {})
+            VANTAGE_CFG.clear()
+            VANTAGE_CFG.update(VANTAGE_CFG_DEFAULTS)
+            VANTAGE_CFG.update(cfg.get("vantage") or {})
             gate_note = ""      # set only when a signal exists; else nothing to say
             # account lock: never trade / never guard on a terminal that is
             # not the account this bot was started on (switched login counts)
@@ -2247,6 +2261,183 @@ def run_live(cfg):
                         print(f"[ladder] {ld2['dir']} layer #{ot2} parked "
                               f"@ {ld2['level']:.2f} SL {ld2['sl']:.2f} "
                               f"TP {ld2['tp']:.2f} (spread-grab fill)")
+            # VANTAGE RELOAD (user 2026-10-12 "the 3 stooges"): the delayed
+            # 4th bullet for the stop-hunt pullback. One reserve LIMIT is
+            # parked NEAR the stop shelf after the pullback has had time to
+            # develop - the hunt fills it at a vantage price while early
+            # layers scratch out light. Bounded: one per signal, TTL expiry,
+            # counts toward max_concurrent, stood down on opposite book.
+            _vg = VANTAGE_CFG
+            _vs = VANTAGE_STATE
+            if _vg.get("on") and _vs.get("scheduled") is not None:
+                _sc = _vs["scheduled"]
+                _vpos = [pp for pp in
+                         (mt5.positions_get(symbol=cfg["symbol"]) or [])
+                         if pp.magic == magic]
+                _vopp = [pp for pp in _vpos
+                         if ("LONG" if pp.type == 0 else "SHORT")
+                         != _sc["dir"]]
+                if _vopp or any((vv.get("dir") != _sc["dir"])
+                                for vv in LADDER_STATE["active"].values()):
+                    if _vs.get("order") is not None:
+                        _rmv = mt5.order_send(
+                            {"action": mt5.TRADE_ACTION_REMOVE,
+                             "order": _vs["order"]["ticket"]})
+                        if _rmv and _rmv.retcode == \
+                                mt5.TRADE_RETCODE_DONE:
+                            print(f"[vantage] {_sc['dir']} stood down - "
+                                  f"opposite book")
+                        _vs["order"] = None
+                    _vs["scheduled"] = None
+                    _vs["scratched_sig"] = None
+                elif time.time() - _sc["born"] > \
+                        float(_vg.get("delay_s", 120) or 0) + \
+                        float(_vg.get("ttl_s", 300) or 0):
+                    _vs["scheduled"] = None
+                    _vs["scratched_sig"] = None
+                    print(f"[vantage] {_sc['dir']} schedule expired "
+                          f"(no hunt to fade)")
+                else:
+                    # hunt-scratch: the pump toward our stops is the tell.
+                    # Scratch early layers light (once per signal) so the
+                    # stooges don't take the full whack together.
+                    if _vs.get("scratched_sig") != _sc.get("sig_id"):
+                        _tkv = mt5.symbol_info_tick(cfg["symbol"])
+                        if _tkv is not None:
+                            _pxv = (_tkv.ask if _sc["dir"] == "SHORT"
+                                    else _tkv.bid)
+                            _adv = ((_pxv - _sc["ref"])
+                                    if _sc["dir"] == "SHORT"
+                                    else (_sc["ref"] - _pxv))
+                            _sdv = _sc["stop_dist"] or 1.0
+                            if _adv >= float(_vg.get("scratch_trig_atr",
+                                                      0.6) or 0) * _sdv \
+                                    and time.time() - _sc["born"] <= \
+                                    float(_vg.get("scratch_within_s",
+                                                  180) or 0):
+                                _nscr = 0
+                                for _sp in _vpos:
+                                    _sdir = ("LONG" if _sp.type == 0
+                                             else "SHORT")
+                                    if _sdir != _sc["dir"]:
+                                        continue
+                                    _ct = (mt5.ORDER_TYPE_SELL
+                                           if _sdir == "LONG"
+                                           else mt5.ORDER_TYPE_BUY)
+                                    _t2 = mt5.symbol_info_tick(
+                                        cfg["symbol"])
+                                    if _t2 is None:
+                                        break
+                                    _px2 = (_t2.bid if _ct ==
+                                            mt5.ORDER_TYPE_SELL
+                                            else _t2.ask)
+                                    _rr2 = mt5.order_send(
+                                        {"action": mt5.TRADE_ACTION_DEAL,
+                                         "symbol": cfg["symbol"],
+                                         "volume": _sp.volume, "type": _ct,
+                                         "position": _sp.ticket,
+                                         "price": _px2, "deviation": 30,
+                                         "magic": magic,
+                                         "comment": "vantage scratch",
+                                         "type_time": mt5.ORDER_TIME_GTC,
+                                         "type_filling": fill_mode})
+                                    if _rr2 and _rr2.retcode == \
+                                            mt5.TRADE_RETCODE_DONE:
+                                        _nscr += 1
+                                _vs["scratched_sig"] = _sc.get("sig_id")
+                                print(f"[vantage] hunt-scratch: closed "
+                                      f"{_nscr} early {_sc['dir']} layer(s) "
+                                      f"into the pump (adv {_adv:.2f})")
+                    # park the reserve bullet once the delay has played out
+                    if _vs.get("order") is None and time.time() >= \
+                            float(_sc.get("arm_at", 0) or 0):
+                        _tk3 = mt5.symbol_info_tick(cfg["symbol"])
+                        _ac3 = mt5.account_info()
+                        _sy3 = mt5.symbol_info(cfg["symbol"])
+                        if _tk3 is not None and _ac3 is not None \
+                                and _sy3 is not None:
+                            _sd3 = _sc["stop_dist"] or 1.0
+                            _pa = float(_vg.get("price_atr", 0.8) or 0)
+                            _lvl = (_tk3.ask + _pa * _sd3) \
+                                if _sc["dir"] == "SHORT" \
+                                else (_tk3.bid - _pa * _sd3)
+                            _ok_lvl = (_lvl > _tk3.bid + 0.05) \
+                                if _sc["dir"] == "SHORT" \
+                                else (_lvl < _tk3.ask - 0.05)
+                            _room = len(_vpos) < min(
+                                4, int(cfg.get("max_concurrent", 3) or 3))
+                            _lots_v = max(
+                                _sy3.volume_min or 0.01,
+                                round(size_lots(
+                                    _ac3.balance,
+                                    _ac3.balance * cfg["risk_pct"] / 100.0,
+                                    _sd3, cfg)
+                                    * float(_vg.get("size_frac", 0.3)
+                                            or 0), 2))
+                            if _ok_lvl and _room:
+                                _dm3 = float(cfg.get("disaster_stop_mult",
+                                                     1.5))
+                                _sl3 = (_lvl - _sd3 * _dm3) \
+                                    if _sc["dir"] == "LONG" \
+                                    else (_lvl + _sd3 * _dm3)
+                                _tp3 = (_lvl + _sd3 * _sc["rr"]) \
+                                    if _sc["dir"] == "LONG" \
+                                    else (_lvl - _sd3 * _sc["rr"])
+                                _ot3 = (mt5.ORDER_TYPE_BUY_LIMIT
+                                        if _sc["dir"] == "LONG"
+                                        else mt5.ORDER_TYPE_SELL_LIMIT)
+                                _rv = mt5.order_send(
+                                    {"action": mt5.TRADE_ACTION_PENDING,
+                                     "symbol": cfg["symbol"],
+                                     "volume": _lots_v, "type": _ot3,
+                                     "price": round(_lvl, 2),
+                                     "deviation": 30,
+                                     "sl": round(_sl3, 2),
+                                     "tp": round(_tp3, 2), "magic": magic,
+                                     "comment": "VAN",
+                                     "type_time": mt5.ORDER_TIME_GTC,
+                                     "type_filling": fill_mode})
+                                if _rv and _rv.retcode == \
+                                        mt5.TRADE_RETCODE_DONE:
+                                    _otv = getattr(_rv, "order", 0)
+                                    if _otv:
+                                        _vs["order"] = {
+                                            "ticket": _otv,
+                                            "born": time.time(),
+                                            "level": _lvl}
+                                        print(f"[vantage] {_sc['dir']} "
+                                              f"reserve parked @ "
+                                              f"{_lvl:.2f} ({_lots_v} lots, "
+                                              f"TTL "
+                                              f"{_vg.get('ttl_s', 300)}s) - "
+                                              f"the hunt fills it, not us")
+                            elif not _room:
+                                print("[vantage] book full - reserve waits "
+                                      "for a free slot")
+                    # parked reserve lifecycle: fills register via the
+                    # position scan; stale reserve cancels like a layer
+                    if _vs.get("order") is not None:
+                        _vo2 = _vs["order"]
+                        _open_v = {oo.ticket for oo in
+                                   (mt5.orders_get(
+                                       symbol=cfg["symbol"]) or [])}
+                        if _vo2["ticket"] not in _open_v:
+                            _vs["order"] = None
+                            print(f"[vantage] reserve #{_vo2['ticket']} "
+                                  f"FILLED ({_sc['dir']} @ "
+                                  f"{_vo2['level']:.2f}) - hunting from "
+                                  f"the vantage")
+                        elif time.time() - _vo2["born"] > \
+                                float(_vg.get("ttl_s", 300) or 0):
+                            _rm2 = mt5.order_send(
+                                {"action": mt5.TRADE_ACTION_REMOVE,
+                                 "order": _vo2["ticket"]})
+                            if _rm2 and _rm2.retcode == \
+                                    mt5.TRADE_RETCODE_DONE:
+                                _vs["order"] = None
+                                print(f"[vantage] stale reserve "
+                                      f"#{_vo2['ticket']} cancelled "
+                                      f"(no hunt came)")
             # register limit fills as managed ctx (tag from order comment)
             for lp in (mt5.positions_get(symbol=cfg["symbol"]) or []):
                 if lp.magic == magic and lp.ticket not in live_ctx:
@@ -2989,6 +3180,31 @@ def run_live(cfg):
                                 print(f"[ladder] bar signal {sig} -> "
                                       f"{_np} layered limits parked "
                                       f"(no market cross)")
+                                _vg0 = VANTAGE_CFG
+                                if _vg0.get("on"):
+                                    _old_v = VANTAGE_STATE.get("order")
+                                    if _old_v is not None:
+                                        _rmo = mt5.order_send(
+                                            {"action":
+                                             mt5.TRADE_ACTION_REMOVE,
+                                             "order": _old_v["ticket"]})
+                                        if _rmo and _rmo.retcode == \
+                                                mt5.TRADE_RETCODE_DONE:
+                                            print("[vantage] prior reserve "
+                                                  "superseded by new signal")
+                                        VANTAGE_STATE["order"] = None
+                                    VANTAGE_STATE["scheduled"] = {
+                                        "dir": sig, "stop_dist": stop_dist,
+                                        "rr": _rr_use, "ref": price,
+                                        "born": time.time(),
+                                        "arm_at": time.time() + float(
+                                            _vg0.get("delay_s", 120) or 0),
+                                        "sig_id": (str(current_bar), sig)}
+                                    VANTAGE_STATE["scratched_sig"] = None
+                                    print(f"[vantage] {sig} reserve "
+                                          f"scheduled (parks in "
+                                          f"{float(_vg0.get('delay_s', 120) or 0):.0f}s "
+                                          f"near the stop shelf)")
                             sig = None
                             pending = None
                     if sig:

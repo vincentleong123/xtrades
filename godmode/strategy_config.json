@@ -57,6 +57,15 @@
     "step_atr": 0.2,
     "ttl_s": 300
   },
+  "vantage": {
+    "on": true,
+    "delay_s": 120,
+    "price_atr": 0.8,
+    "size_frac": 0.3,
+    "ttl_s": 300,
+    "scratch_trig_atr": 0.6,
+    "scratch_within_s": 180
+  },
   "cost": {
     "max_rt_pct": 20,
     "min_rt_usd": 0.25,

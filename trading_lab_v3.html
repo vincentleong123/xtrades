@@ -314,6 +314,11 @@
                     <div class="input-group"><label>Ladder L1 %</label><input type="number" id="lw1" value="50" step="5" min="0" max="100" title="Layer weight % of signal size (normalized)"></div>
                     <div class="input-group"><label>Ladder L2 %</label><input type="number" id="lw2" value="30" step="5" min="0" max="100"></div>
                     <div class="input-group"><label>Ladder L3 %</label><input type="number" id="lw3" value="20" step="5" min="0" max="100"></div>
+                    <div class="chkrow"><input type="checkbox" id="vanOn" checked><label for="vanOn">Vantage reload (hunt-fade 4th)</label><span style="font-size:11px;color:#8b93a7;">delayed reserve near stop shelf + early scratch</span></div>
+                    <div class="input-group"><label>Vantage delay s</label><input type="number" id="vanDelay" value="120" step="30" min="0" max="900" title="Park the reserve this long after the signal so the pullback develops"></div>
+                    <div class="input-group"><label>Vantage ATR</label><input type="number" id="vanAtr" value="0.8" step="0.1" min="0.2" max="1.4" title="Reserve level sits this x ATR adverse of signal ref (inside the soft stop)"></div>
+                    <div class="input-group"><label>Vantage size x</label><input type="number" id="vanFrac" value="0.3" step="0.1" min="0.1" max="1" title="Reserve size as fraction of signal lots"></div>
+                    <div class="input-group"><label>Vantage scratch x</label><input type="number" id="vanScratch" value="0.6" step="0.1" min="0.3" max="1" title="Pump toward stops (x ATR) that scratches early layers, once per signal"></div>
                     <div class="input-group"><label>Profit Target $</label><input type="number" id="profitTarget" value="100" step="100" min="0"></div>
                     <div class="input-group"><label>Spread (pts)</label><input type="number" id="spreadPts" value="34" step="1" min="0" max="500" title="Live HFM XAUUSD spread in points (0.01 each) - charged on every fill"></div>
                     <div class="input-group"><label>Goal $ (bank it)</label><input type="number" id="goalBalance" value="" step="100" min="500" title="Optional: bank profits here and restart the $500 journey. Empty = compound freely (spread, margin and 100-lot broker caps still apply)"></div>
@@ -480,7 +485,7 @@ const TF_LABELS = { '1min':'1M', '2min':'2M', '3min':'3M', '5min':'5M', '15min':
 // ---- FIXED DEFAULTS: every refresh starts here (the measured-best settings) ----
 const DEFAULTS = { tf: '1min', emaFast: 5, emaSlow: 27, atrStop: 1, rrRatio: 5,
     riskPct: 5, maxConcurrent: 3, baseLots: 0.45, wickProof: true, disasterMult: 1.5, profitTarget: 100,
-    spreadPts: 34, exitEngine: true, givePeak: 2, giveKeepPct: 30, squeezeOn: false, squeezePct: 70, goalBalance: '', floorBalance: 400, crossOn: true, alignOn: false, fadeOn: false, reloadOn: false, fadeSpike: 2, fadeN: 20, vwapOn: false, vwapKEntry: 2, vwapKStop: 3, lw1: 50, lw2: 30, lw3: 20, sineOn: false, fibOn: false, fibN: 50, beatOn: false, tightTP: false, maxHold: 0, roundOn: false, fomoOn: false, fomoN: 4 };
+    spreadPts: 34, exitEngine: true, givePeak: 2, giveKeepPct: 30, squeezeOn: false, squeezePct: 70, goalBalance: '', floorBalance: 400, crossOn: true, alignOn: false, fadeOn: false, reloadOn: false, fadeSpike: 2, fadeN: 20, vwapOn: false, vwapKEntry: 2, vwapKStop: 3, lw1: 50, lw2: 30, lw3: 20, sineOn: false, fibOn: false, fibN: 50, beatOn: false, tightTP: false, maxHold: 0, roundOn: false, fomoOn: false, fomoN: 4, vanOn: true, vanDelay: 120, vanAtr: 0.8, vanFrac: 0.3, vanScratch: 0.6 };
 
 let currentSpeedProfile = DEFAULTS.tf;
 let allTrades = [];
@@ -925,6 +930,7 @@ function simulateTrades(candles, p) {
     const closed = [];
     const opens = [];
     const pendings = [];   // live limit-ladder orders awaiting fill (TTL 300s)
+    const vanSig = {};   // vantage reload records per parent sigId (scratch window)
     let cancelled = 0;       // parked layers that TTL-expired unfilled
     let numSig = 0;
     let cycleNo = 1;             // journey cycles: bank the goal, restart at $500
@@ -1219,11 +1225,36 @@ function simulateTrades(candles, p) {
             const pd = pendings[k];
             const ttlGone = (pd.createdIdx != null && i - pd.createdIdx > 5) || (pd.createdIdx == null && (c.t - pd.createdT) > 300);
             if (ttlGone) { pendings.splice(k, 1); cancelled++; continue; }
+            if (pd.availIdx != null && i < pd.availIdx) continue;   // vantage delay: not yet live
             const hit = pd.direction === 'LONG' ? c.l <= pd.level : c.h >= pd.level;
             if (!hit) continue;
             pendings.splice(k, 1);
             num++;
             opens.push(Object.assign(pd.pos, { num: num, candleIdx: i, entryTime: c.t, entryBalance: balance, cycle: cycleNo, spreadPaid: pd.pos.lots * 100 * spreadPx }));
+        }
+
+        // VANTAGE hunt-scratch: the pump toward our stops is the tell. Once
+        // per signal, inside the window: scratch same-direction opens light
+        // so the book meets the sweep small and the reserve (parked adverse)
+        // carries the rejection. Mirrors the live hunt-scratch.
+        for (const sid in vanSig) {
+            const vs = vanSig[sid];
+            const vSecs = i > 0 ? Math.max(1, c.t - candles[i - 1].t) : 120;
+            const wBars = Math.max(1, Math.round(180 / vSecs));
+            if (i - vs.bornIdx > wBars + 10) { delete vanSig[sid]; continue; }
+            if (vs.scratched) continue;
+            if (i - vs.bornIdx > wBars) { vs.scratched = true; continue; }
+            const advPx = vs.dir === 'LONG' ? vs.ref - c.l : c.h - vs.ref;
+            if (advPx >= (p.vanScratch || 0.6) * vs.slDist) {
+                vs.scratched = true;
+                for (let k = opens.length - 1; k >= 0; k--) {
+                    const t = opens[k];
+                    if (t.direction !== vs.dir || t.status !== 'open') continue;
+                    const sx = t.direction === 'LONG' ? c.c - spreadPx : c.c + spreadPx;
+                    closeTrade(t, sx, 'V-SCRATCH', i);
+                    opens.splice(k, 1);
+                }
+            }
         }
 
         if (balance <= 0) { balance = 0; break; }
@@ -1280,6 +1311,28 @@ function simulateTrades(candles, p) {
                 } else {
                     pendings.push({ sigId: sigId, direction: dir, level: level, createdT: c.t, pos: pos });
                 }
+            }
+            // VANTAGE RELOAD (live: delayed 4th bullet near the stop shelf).
+            // The reserve LIMIT parks once the pullback has had time to
+            // develop (availIdx delay); the hunt fills it at a vantage
+            // price. Own sigId so it counts toward maxConcurrent like live.
+            if (p.vanOn && atr[i] && activeSigs() < p.maxConcurrent && !opens.some(o => o.direction !== dir)) {
+                const vBarSecs = i > 0 ? Math.max(1, c.t - candles[i - 1].t) : 120;
+                const vBars = Math.max(1, Math.round((p.vanDelay || 0) / vBarSecs));
+                const vLevel = dir === 'LONG' ? entry - (p.vanAtr || 0.8) * atr[i] : entry + (p.vanAtr || 0.8) * atr[i];
+                const vLots = Math.max(0.01, r2((p.vanFrac || 0.3) * totalLots));
+                const vFill = vLevel + (dir === 'LONG' ? spreadPx : -spreadPx);
+                const vSig = ++numSig;
+                vanSig[sigId] = { dir: dir, ref: entry, slDist: slDist, bornIdx: i, scratched: false };
+                pendings.push({ sigId: vSig, direction: dir, level: vLevel, createdT: c.t, createdIdx: i + vBars, availIdx: i + vBars, pos: {
+                    sigId: vSig, direction: dir, entryPrice: vFill, kind: 'vantage',
+                    exitPrice: null, exitBalance: null, lots: vLots,
+                    pnl: 0, pnlPct: 0, status: 'open', isWin: false,
+                    sl: dir === 'LONG' ? vFill - slDist : vFill + slDist,
+                    hard: dir === 'LONG' ? vFill - slDist * (p.disasterMult || 1) : vFill + slDist * (p.disasterMult || 1),
+                    tp: dir === 'LONG' ? vFill + slDist * p.rrRatio : vFill - slDist * p.rrRatio,
+                    riskAmount: riskAmt, pk: 0, reason: ''
+                } });
             }
         }
 
@@ -1619,7 +1672,12 @@ function readSimParams() {
         vwapKStop: Math.min(6, Math.max(1, parseFloat(gv('vwapKStop', '3')) || 3)),
         lw1: Math.min(100, Math.max(0, parseFloat(gv('lw1', '50')) || 50)),
         lw2: Math.min(100, Math.max(0, parseFloat(gv('lw2', '30')) || 30)),
-        lw3: Math.min(100, Math.max(0, parseFloat(gv('lw3', '20')) || 20))
+        lw3: Math.min(100, Math.max(0, parseFloat(gv('lw3', '20')) || 20)),
+        vanOn: gc('vanOn'),
+        vanDelay: Math.max(0, parseFloat(gv('vanDelay', '120')) || 0),
+        vanAtr: Math.min(1.4, Math.max(0.2, parseFloat(gv('vanAtr', '0.8')) || 0.8)),
+        vanFrac: Math.min(1, Math.max(0.1, parseFloat(gv('vanFrac', '0.3')) || 0.3)),
+        vanScratch: Math.min(1, Math.max(0.3, parseFloat(gv('vanScratch', '0.6')) || 0.6))
     };
 }
 
@@ -2425,7 +2483,7 @@ function resetBest() {
     document.getElementById('vwapKStop').value = DEFAULTS.vwapKStop;
     document.getElementById('lw1').value = DEFAULTS.lw1;
     document.getElementById('lw2').value = DEFAULTS.lw2;
-    document.getElementById('lw3').value = DEFAULTS.lw3;
+    document.getElementById('lw3').value = DEFAULTS.lw3;     document.getElementById('vanOn').checked = DEFAULTS.vanOn;     document.getElementById('vanDelay').value = DEFAULTS.vanDelay;     document.getElementById('vanAtr').value = DEFAULTS.vanAtr;     document.getElementById('vanFrac').value = DEFAULTS.vanFrac;     document.getElementById('vanScratch').value = DEFAULTS.vanScratch;
     document.getElementById('crossOn').checked = DEFAULTS.crossOn;
     document.getElementById('alignOn').checked = DEFAULTS.alignOn;
     document.getElementById('goalBalance').value = DEFAULTS.goalBalance;
@@ -2869,7 +2927,8 @@ function collectStrategy() {
         base_lots: +document.getElementById('baseLots').value || 0.01,
         wick_proof_stop: document.getElementById('wickProof').checked,
         disaster_stop_mult: +document.getElementById('disasterMult').value || 1.5,
-        profit_target_usd: +document.getElementById('profitTarget').value || 0
+        profit_target_usd: +document.getElementById('profitTarget').value || 0,
+        vantage: { on: document.getElementById('vanOn').checked, delay_s: +document.getElementById('vanDelay').value || 0, price_atr: +document.getElementById('vanAtr').value || 0.8, size_frac: +document.getElementById('vanFrac').value || 0.3, ttl_s: 300, scratch_trig_atr: +document.getElementById('vanScratch').value || 0.6, scratch_within_s: 180 }
     };
 }
 
@@ -3274,6 +3333,16 @@ setDataSource('usd');
         }
         regenerate();
         octPreset();
+        // AUTO-PLAYBACK (user 2026-10-12): refresh replays history hands-free
+        setTimeout(() => {
+            const closed = (allTrades || []).filter(t => t.status === 'closed');
+            if (!isPlaying && closed.length > 1 && currentTradeIndex < closed.length - 1) {
+                isPlaying = true;
+                const b = document.getElementById('btnPlay');
+                if (b) b.textContent = 'Pause';
+                animate();
+            }
+        }, 900);
     };
     setTimeout(() => go(null), 2500);
     try {
