@@ -38,7 +38,7 @@
   "whip_break_n": 2,
   "whip_break_bars": 45,
   "gates": {
-    "breakout_n": 15,
+    "breakout_n": 5,
     "atr_expansion": false,
     "atr_expansion_period": 50,
     "breakeven_r": 1
